@@ -2,13 +2,16 @@ import os
 import numpy as np
 import pandas as pd
 from top2vec import Top2Vec
+from gensim.models import Doc2Vec
 
-class Top2VecTrainer:   # 모델 학습 
-    def __init__(self, output_path, input_path):
-        self.OUTPUT_PATH = output_path
+class Top2VecTrainer:  
+    def __init__(self, top2vec_output_path, doc2vec_output_path, input_path):
+        self.TOP2VEC_OUTPUT_PATH = top2vec_output_path
+        self.DOC2VEC_OUTPUT_PATH = doc2vec_output_path
         self.INPUT_PATH = input_path
         
-        os.makedirs(os.path.dirname(self.OUTPUT_PATH), exist_ok=True)
+        os.makedirs(os.path.dirname(self.TOP2VEC_OUTPUT_PATH), exist_ok=True)
+        os.makedirs(os.path.dirname(self.DOC2VEC_OUTPUT_PATH), exist_ok=True)
         self.preprocessed_text = []
     
     def load_data(self):
@@ -36,14 +39,19 @@ class Top2VecTrainer:   # 모델 학습
         )
     
     def save_model(self):
-        self.top2vec_model.save(self.OUTPUT_PATH)
-        print(f"모델 저장 완료")
+        # Top2Vec 모델 저장
+        self.top2vec_model.save(self.TOP2VEC_OUTPUT_PATH)
+        print(f"Top2Vec 모델 저장 완료: {self.TOP2VEC_OUTPUT_PATH}")
+
+        # Doc2Vec 모델 저장 (Top2Vec 내부 Doc2Vec 모델 추출)
+        doc2vec_model = self.top2vec_model.model
+        doc2vec_model.save(self.DOC2VEC_OUTPUT_PATH)
+        print(f"Doc2Vec 모델 저장 완료: {self.DOC2VEC_OUTPUT_PATH}")
     
     def process(self):
         self.load_data()
         self.train_model()
         self.save_model()
-
 
 class Top2VecProcessor:  # 모델이 학습한 문서 및 단어에 대한 임베딩값 추출 
     def __init__(self, output_dir, input_dir, model_path, title_path):
@@ -194,12 +202,13 @@ class Top2VecInference:
 
 
 if __name__ == "__main__":
-    # # 모델 학습시킨 후, 학습된 모델 저장
-    # trainer = Top2VecTrainer(
-    #     output_path='/home/women/doyoung/Top2Vec/embedding/trained_models/trained_model',
-    #     input_path='/home/women/doyoung/Top2Vec/preprocessing/input/text_1100.txt'
-    # )
-    # trainer.process()
+    # 모델 학습시킨 후, 학습된 모델 저장
+    trainer = Top2VecTrainer(
+    top2vec_output_path='/home/women/doyoung/Top2Vec/embedding/trained_models/top2vec_model',
+    doc2vec_output_path='/home/women/doyoung/Top2Vec/embedding/trained_models/doc2vec_model',
+    input_path='/home/women/doyoung/Top2Vec/preprocessing/output/text_1100.txt'
+    )
+    trainer.process()
     
     # # 모델이 학습한 문서 및 단어에 대한 임베딩값 추출 
     # processor = Top2VecProcessor(
@@ -210,18 +219,18 @@ if __name__ == "__main__":
     # )
     # processor.process()
 
-    # 학습된 모델을 활용하여 새로운 문서/단어에 대한 임베딩 추론
-    inference = Top2VecInference(
-        model_path='/home/women/doyoung/Top2Vec/embedding/trained_models/top2vec_trained1100',
-        output_dir='/home/women/doyoung/Top2Vec/embedding/output/inferred_doc_word',
+    # # 학습된 모델을 활용하여 새로운 문서/단어에 대한 임베딩 추론
+    # inference = Top2VecInference(
+    #     model_path='/home/women/doyoung/Top2Vec/embedding/trained_models/top2vec_trained1100',
+    #     output_dir='/home/women/doyoung/Top2Vec/embedding/output/inferred_doc_word',
 
-    )
-    # 새로운 문서 리스트 예시. 항상 2차원으로 입력해야 함.
-    documents = [
-        ["고양이 집사 아파트 주인"],
-        ["포도 사과 오렌지 가게 위치"],
-        ["책상 의자 소파 침대"]
-    ]
-    # Inference 클래스 실행
-    inference.process(documents)
+    # )
+    # # 새로운 문서 리스트 예시. 항상 2차원으로 입력해야 함.
+    # documents = [
+    #     ["고양이 집사 아파트 주인"],
+    #     ["포도 사과 오렌지 가게 위치"],
+    #     ["책상 의자 소파 침대"]
+    # ]
+    # # Inference 클래스 실행
+    # inference.process(documents)
 
