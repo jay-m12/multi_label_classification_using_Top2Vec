@@ -21,10 +21,10 @@ def making_minor_Y(gt_path, output_path):
     Y_df.to_csv(output_path, index=False, encoding='utf-8-sig')
 
 
-gt_path = '/home/women/doyoung/Top2Vec/preprocessing/input/train_test_labels.txt'
-output_path = '/home/women/doyoung/Top2Vec/preprocessing/output/Y_minor.csv'
+# gt_path = '/home/women/doyoung/Top2Vec/preprocessing/input/train_test_labels.txt'
+# output_path = '/home/women/doyoung/Top2Vec/preprocessing/output/Y_minor.csv'
 
-making_minor_Y(gt_path, output_path)
+# making_minor_Y(gt_path, output_path)
 
 
 
@@ -47,9 +47,43 @@ def making_major_Y(gt_path, output_path):
     Y_df.to_csv(output_path, index=False, encoding='utf-8-sig')
 
 
-gt_path = '/home/women/doyoung/Top2Vec/preprocessing/input/train_test_labels.txt'
-output_path = '/home/women/doyoung/Top2Vec/preprocessing/output/Y_major.csv'
+# gt_path = '/home/women/doyoung/Top2Vec/preprocessing/input/train_test_labels.txt'
+# output_path = '/home/women/doyoung/Top2Vec/preprocessing/output/Y_major.csv'
 
-making_major_Y(gt_path, output_path)
+# making_major_Y(gt_path, output_path)
 
 
+def making_major_GT(input_txt_path, output_csv_path):
+    with open(input_txt_path, 'r', encoding='utf-8') as file:
+        label_data = file.readlines()
+    
+    db_keys = [
+        453073, 453074, 453075, 453076, 453077, 453078, 453079, 453082, 453083, 453084, 453093,
+        453095, 453096, 453097, 452970, 453102, 453104, 453105, 453110, 453114, 453116
+    ]
+
+    # label_data가 더 길면 DB Key 수에 맞게 자름
+    if len(label_data) > len(db_keys):
+        label_data = label_data[:len(db_keys)]  
+    
+    result = []
+
+    for idx, label_str in enumerate(label_data):
+        db_key = db_keys[idx]  
+        model = "major_GT" 
+        
+        label_list = [item.split('-')[0].strip() for item in label_str.strip().split(',') if '-' in item]
+        
+        unique_labels = ", ".join(sorted(set(label_list))) 
+        
+        result.append([db_key, model, unique_labels])
+
+    result_df = pd.DataFrame(result, columns=["DB Key", "Model", "Label"])
+
+    result_df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
+
+    print(f"CSV 파일이 {output_csv_path}에 저장되었습니다.")
+
+input_txt_path = '/home/women/doyoung/Top2Vec/preprocessing/input/test_labels.txt'
+output_csv_path = '/home/women/doyoung/Top2Vec/preprocessing/output/major_GT.csv'
+making_major_GT(input_txt_path, output_csv_path)
