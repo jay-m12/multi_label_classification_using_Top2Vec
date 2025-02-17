@@ -34,12 +34,11 @@ X['Embedding Vector'] = X['Embedding Vector'].astype(str).apply(
     lambda x: np.array(list(map(float, x.strip('[]').split(','))))
 )
 
-# 테스트 데이터 분리
+# 테스트 데이터(138~158) 분리
 test_mask = (X['Document ID'] >= 138) & (X['Document ID'] <= 158)
 X_test = X[test_mask].copy()
 X_train = X[~test_mask].copy()
 
-# Y 데이터 분리
 Y_major_test = Y_major.loc[test_mask].copy()
 Y_major_train = Y_major.loc[~test_mask].copy()
 Y_minor_test = Y_minor.loc[test_mask].copy()
@@ -61,13 +60,11 @@ Y_minor_test_filtered = Y_minor_test.drop(columns=minor_single_class_cols)
 print(f"[중분류] 제거된 컬럼 수: {len(minor_single_class_cols)}/{Y_minor.shape[1]}")
 print("[중분류] 제거된 컬럼 목록:", minor_single_class_cols)
 
-# X 데이터 준비
 X_train = X_train.drop(columns=['Document ID'])
 X_test = X_test.drop(columns=['Document ID'])
 X_train = np.stack(X_train['Embedding Vector'].values)
 X_test = np.stack(X_test['Embedding Vector'].values)
 
-# Y 데이터 준비
 Y_major_train = Y_major_train_filtered.values
 Y_major_test = Y_major_test_filtered.values
 Y_minor_train = Y_minor_train_filtered.values
@@ -80,7 +77,6 @@ major_model.fit(X_train, Y_major_train)
 
 Y_major_pred_proba = major_model.predict_proba(X_test)
 
-# 최적 임계값 계산 (대분류)
 major_optimal_thresholds = []
 for i in range(Y_major_test.shape[1]):
     if np.sum(Y_major_test[:, i]) == 0:
@@ -96,7 +92,6 @@ for i in range(Y_major_test.shape[1]):
     optimal_threshold = float(thresholds[optimal_idx])
     major_optimal_thresholds.append(optimal_threshold)
 
-# 예측 라벨 생성 (대분류)
 Y_major_pred = np.array([
     ((proba[:, 1] >= major_optimal_thresholds[i]) if proba.shape[1] > 1 
      else (proba[:, 0] >= major_optimal_thresholds[i])).astype(int)
@@ -110,7 +105,7 @@ minor_model.fit(X_train, Y_minor_train)
 
 Y_minor_pred_proba = minor_model.predict_proba(X_test)
 
-# === 대분류-중분류 매핑 정보 ==================================================
+# === 대분류-중분류 매핑 ==================================================
 major_minor_mapping = {
     0: ['가족정책', '돌봄', '저출산', '일생활균형_가족'],  # 가족
     1: ['건강'],  # 건강
@@ -128,28 +123,24 @@ major_minor_mapping = {
 
 def get_minor_classes(major_class_idx):
     minor_classes = major_minor_mapping.get(major_class_idx, [])
-    # 중분류 라벨 이름을 인덱스로 변환
     minor_class_indices = [Y_minor_train_filtered.columns.get_loc(col) for col in minor_classes if col in Y_minor_train_filtered.columns]
     return minor_class_indices
 
-# 확률값 조정 (중분류)
-for doc_idx in range(X_test.shape[0]):  # 21개의 테스트 문서에 대해 반복
-    for class_idx in range(Y_major_pred.shape[1]):  # 12개의 대분류에 대해 반복
+for doc_idx in range(X_test.shape[0]): 
+    for class_idx in range(Y_major_pred.shape[1]):  
         if Y_major_pred[doc_idx, class_idx] == 0:
-            # 대분류에서 0으로 예측된 경우, 해당 중분류 라벨들의 확률값을 마이너스 무한대로 설정
             minor_class_indices = get_minor_classes(class_idx)
             for minor_class_idx in minor_class_indices:
                 Y_minor_pred_proba[minor_class_idx][doc_idx, 1] = -1000000000
 
 
-# 최적 임계값 계산 (중분류)
 minor_optimal_thresholds = []
 for i in range(len(Y_minor_pred_proba)):
     if np.sum(Y_minor_test[:, i]) == 0:
         minor_optimal_thresholds.append(0.3)
         continue
     
-    class_prob = Y_minor_pred_proba[i][:, 1]  # 양성 클래스(1)의 확률
+    class_prob = Y_minor_pred_proba[i][:, 1]  
     
     fpr, tpr, thresholds = roc_curve(Y_minor_test[:, i], class_prob)
     youdens_j = tpr - fpr
@@ -157,14 +148,12 @@ for i in range(len(Y_minor_pred_proba)):
     optimal_threshold = float(thresholds[optimal_idx])
     minor_optimal_thresholds.append(optimal_threshold)
 
-# 예측 라벨 생성 (중분류)
 Y_minor_pred = np.array([
     (proba[:, 1] >= minor_optimal_thresholds[i]).astype(int)
     for i, proba in enumerate(Y_minor_pred_proba)
 ]).T
 
 # === 결과 평가 및 저장 =========================================================
-# F1 스코어 계산 (중분류)
 f1_micro = f1_score(Y_minor_test, Y_minor_pred, average="micro")
 f1_macro = f1_score(Y_minor_test, Y_minor_pred, average="macro")
 f1_weighted = f1_score(Y_minor_test, Y_minor_pred, average="weighted")
@@ -173,7 +162,6 @@ print(f"Micro F1 Score (Optimal Threshold): {f1_micro:.4f}")
 print(f"Macro F1 Score (Optimal Threshold): {f1_macro:.4f}")
 print(f"Weighted F1 Score (Optimal Threshold): {f1_weighted:.4f}")
 
-# 최적 임계값 저장 (중분류)
 minor_optimal_thresholds_df = pd.DataFrame({
     "class_name": Y_minor_train_filtered.columns.tolist(),
     "optimal_threshold": minor_optimal_thresholds
@@ -181,7 +169,6 @@ minor_optimal_thresholds_df = pd.DataFrame({
 minor_optimal_thresholds_df.to_csv(f"{OUTPUT_DIR}/optimal_thresholds_lr.csv", index=False)
 print(f"\nOptimal thresholds saved to '{OUTPUT_DIR}/optimal_thresholds_lr.csv'.")
 
-# AUC 계산 (중분류)
 auc_scores = []
 for i in range(Y_minor_test.shape[1]):
     if np.sum(Y_minor_test[:, i]) == 0:
@@ -200,7 +187,6 @@ valid_auc_scores = [score for score in auc_scores if score is not None]
 average_auc = np.mean(valid_auc_scores)
 print(f"Average AUC: {average_auc:.4f}")
 
-# Hit@k 계산 (중분류)
 y_proba_matrix = np.hstack([proba[:, -1].reshape(-1,1) if proba.shape[1] > 1 else proba for proba in Y_minor_pred_proba])
 
 Y_minor_pred_full = np.zeros((Y_minor_pred.shape[0], len(Y_minor.columns)))
@@ -225,11 +211,9 @@ print(f"Hit@3: {hit_3:.4f}")
 print(f"Hit@5: {hit_5:.4f}")
 
 # === 결과 저장 ===============================================================
-# 예측 라벨 출력 (중분류)
 def predict_label(row, column_names):
     return ', '.join(column_names[row == 1])
 
-# Minor 데이터셋에 대한 예측 수행
 minor_ground_truth_df = pd.read_csv(MINOR_GROUND_TRUTH, encoding='utf-8-sig')
 
 lable_res_df = pd.DataFrame({
@@ -244,7 +228,6 @@ lable_res_df.to_csv(lable_res_path, index=False, encoding = 'utf-8-sig')
 
 print(f'각 문서의 라벨 예측 결과 저장 경로: {lable_res_path}')
 
-# 예측된 라벨과 확률을 함께 출력 (중분류)
 def predict_label_with_proba(row, proba_row, column_names):
     labels_with_proba = [
         (column_names[i], proba_row[i])
@@ -266,7 +249,6 @@ label_res_with_prob_df.to_csv(lable_res_with_prob_path, index=False, encoding='u
 
 print(f'각 문서의 라벨 및 확률 예측 결과 저장 경로: {lable_res_with_prob_path}')
 
-# 전체 라벨 확률값 출력 (중분류)
 def predict_all_labels_with_proba(proba_row, column_names):
     labels_with_proba = [
         (column_names[i], proba_row[i])
