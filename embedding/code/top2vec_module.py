@@ -153,25 +153,24 @@ class Top2VecProcessor:  # 모델이 학습한 문서 및 단어에 대한 임�
         self.save_document_topics()
 
 
-class Top2VecInference:
+class Doc2VecInference:
     def __init__(self, model_path, output_dir):
         self.model_path = model_path
         self.output_dir = output_dir
-        self.top2vec_model = None
+        self.doc2vec_model = None
 
         os.makedirs(self.output_dir, exist_ok=True)
 
     def load_model(self):
-
-        self.top2vec_model = Top2Vec.load(self.model_path)
-        print("추론을 위한 모델 로드 완료")
+        self.doc2vec_model = Doc2Vec.load(self.model_path)
+        print("추론을 위한 Doc2Vec 모델 로드 완료")
 
     def infer_document_vectors(self, documents):
-        doc_vectors = np.array([self.top2vec_model.infer_vector(doc.split()) for doc in documents])
+        doc_vectors = np.array([self.doc2vec_model.infer_vector(doc) for doc in documents])
         return doc_vectors
 
     def infer_word_vectors(self, words):
-        word_vectors = self.top2vec_model.get_word_vectors(words)
+        word_vectors = np.array([self.doc2vec_model.wv[word] for word in words if word in self.doc2vec_model.wv])
         return word_vectors
 
     def save_vectors_to_csv(self, document_vectors, word_vectors, words):
@@ -194,21 +193,21 @@ class Top2VecInference:
         self.load_model()
         document_vectors = self.infer_document_vectors(documents)
 
-        # 문서 내 모든 유니크한 단어 추출
-        unique_words = sorted(set(" ".join(documents).split()))
+        unique_words = sorted(set(" ".join([" ".join(doc) for doc in documents]).split()))
         word_vectors = self.infer_word_vectors(unique_words)
 
         self.save_vectors_to_csv(document_vectors, word_vectors, unique_words)
 
 
+
 if __name__ == "__main__":
-    # 모델 학습시킨 후, 학습된 모델 저장
-    trainer = Top2VecTrainer(
-    top2vec_output_path='/home/women/doyoung/Top2Vec/embedding/trained_models/top2vec_model',
-    doc2vec_output_path='/home/women/doyoung/Top2Vec/embedding/trained_models/doc2vec_model',
-    input_path='/home/women/doyoung/Top2Vec/preprocessing/output/text_1100.txt'
-    )
-    trainer.process()
+    # # 모델 학습시킨 후, 학습된 모델 저장
+    # trainer = Top2VecTrainer(
+    # top2vec_output_path='/home/women/doyoung/Top2Vec/embedding/trained_models/top2vec_model',
+    # doc2vec_output_path='/home/women/doyoung/Top2Vec/embedding/trained_models/doc2vec_model',
+    # input_path='/home/women/doyoung/Top2Vec/preprocessing/output/text_1100.txt'
+    # )
+    # trainer.process()
     
     # # 모델이 학습한 문서 및 단어에 대한 임베딩값 추출 
     # processor = Top2VecProcessor(
@@ -219,18 +218,17 @@ if __name__ == "__main__":
     # )
     # processor.process()
 
-    # # 학습된 모델을 활용하여 새로운 문서/단어에 대한 임베딩 추론
-    # inference = Top2VecInference(
-    #     model_path='/home/women/doyoung/Top2Vec/embedding/trained_models/top2vec_trained1100',
-    #     output_dir='/home/women/doyoung/Top2Vec/embedding/output/inferred_doc_word',
-
-    # )
-    # # 새로운 문서 리스트 예시. 항상 2차원으로 입력해야 함.
-    # documents = [
-    #     ["고양이 집사 아파트 주인"],
-    #     ["포도 사과 오렌지 가게 위치"],
-    #     ["책상 의자 소파 침대"]
-    # ]
-    # # Inference 클래스 실행
-    # inference.process(documents)
+    ## 학습된 doc2vec을 활용한 문서/단어 임베딩 추론
+    inference = Doc2VecInference(
+        model_path='/home/women/doyoung/Top2Vec/embedding/trained_models/doc2vec_model', 
+        output_dir='/home/women/doyoung/Top2Vec/embedding/output/inferred_doc_word',
+    )
+   
+    # 새로운 문서들로 구성된 2차원 리스트. txt/csv 입력 데이터를 2차원 리스트로 변환해야 함.
+    documents = [
+        ["고양이 집사 아파트 주인"],
+        ["포도 사과 오렌지 가게 위치"],
+        ["책상 의자 소파 침대"]
+    ]
+    inference.process(documents)
 
