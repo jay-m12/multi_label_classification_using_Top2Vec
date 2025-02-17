@@ -108,25 +108,18 @@ def making_minor_GT(input_txt_path, output_csv_path):
 
     for idx, label_str in enumerate(label_data):
         db_key = db_keys[idx]  
-        model = "minor_GT"  # 모델 이름을 "minor_GT"로 설정
-        
-        # '-' 뒷부분이 중분류 라벨이므로 그 부분을 추출
+        model = "minor_GT"  
         label_list = [item.split('-')[1].strip() for item in label_str.strip().split(',') if '-' in item]
-        
-        unique_labels = ", ".join(sorted(set(label_list)))  # 중복 제거 후, 정렬하여 저장
-        
+        unique_labels = ", ".join(sorted(set(label_list)))  
         result.append([db_key, model, unique_labels])
 
     result_df = pd.DataFrame(result, columns=["DB Key", "Model", "Label"])
 
-    # 결과를 CSV 파일로 저장
     result_df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
 
     print(f"CSV 파일이 {output_csv_path}에 저장되었습니다.")
 
-# 예시 경로
-input_txt_path = '/home/women/doyoung/Top2Vec/preprocessing/input/test_labels.txt'  # 실제 경로로 수정
-output_csv_path = '/home/women/doyoung/Top2Vec/preprocessing/output/minor_GT.csv'  # 저장될 파일 경로
+input_txt_path = '/home/women/doyoung/Top2Vec/preprocessing/input/test_labels.txt'  
+output_csv_path = '/home/women/doyoung/Top2Vec/preprocessing/output/minor_GT.csv'  
 
-# 함수 실행
 making_minor_GT(input_txt_path, output_csv_path)
