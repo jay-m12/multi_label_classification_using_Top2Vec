@@ -201,12 +201,11 @@ class Top2VecLogisticRegression:
         return title_dict
 
     def predict_all_labels_with_proba(self, proba_row, column_names):
-        labels_with_proba = list(zip(column_names, proba_row))  # 라벨과 확률을 튜플로 묶기
-        labels_with_proba.sort(key=lambda x: x[1], reverse=True)  # 확률값을 기준으로 내림차순 정렬
-        return ', '.join([f"{label}-{proba:.3f}" for label, proba in labels_with_proba])  # 문자열로 변환
+        labels_with_proba = list(zip(column_names, proba_row)) 
+        labels_with_proba.sort(key=lambda x: x[1], reverse=True) 
+        return ', '.join([f"{label}-{proba:.3f}" for label, proba in labels_with_proba]) 
 
     def save_results(self):
-        # 예측 라벨 출력(확률값 제외) [1]
         lable_res_df = pd.DataFrame({
             'DB Key': self.test_db_key,
             'Model': 'Top2Vec-LogisticRegression',
@@ -220,7 +219,6 @@ class Top2VecLogisticRegression:
 
         print(f'각 문서의 라벨 예측 결과 저장 경로: {lable_res_path}')
 
-        # 예측된 라벨과 확률을 함께 출력 (확률 내림차순 정렬 포함) [2]
         lable_res_with_prob_df = pd.DataFrame({
             'DB Key': self.test_db_key,
             'Model': 'Top2Vec-LogisticRegression',
@@ -235,7 +233,6 @@ class Top2VecLogisticRegression:
 
         print(f'각 문서의 라벨 및 확률 예측 결과 저장 경로: {lable_res_with_prob_path}')
 
-        # 전체 라벨 확률값 출력 [3]
         test_document_ids = self.X.loc[((self.X['Document ID'] >= 138) & (self.X['Document ID'] <= 158)), 'Document ID'].values
         total_df = pd.DataFrame({
             'DB Key': self.test_db_key,
@@ -251,11 +248,9 @@ class Top2VecLogisticRegression:
 
         print(f'각 문서에 대한 모든 라벨의 확률값 결과의 경로: {all_labels_results_path}')
 
-        # 900개 전체 문서에 대한 예측된 라벨 및 확률값 추출하기
         test900_ids = self.test900_df['Document ID'].values
         self.title_dict = self.load_titles(self.TITLE900_PATH)
 
-        # 예측 라벨과 확률을 포함하여 'Title' 컬럼 추가
         label_res_with_all_df_900 = pd.DataFrame({
             'DB Key': test900_ids,
             'Title': [self.title_dict.get(str(db_key), 'Unknown') for db_key in test900_ids],
@@ -264,7 +259,6 @@ class Top2VecLogisticRegression:
                        for proba_row in self.Y_proba_full_900]
         })
 
-        # 결과를 저장할 경로
         label_res_with_all_df_900_path = f"{self.OUTPUT_DIR}/test_900_all_labels.csv"
         label_res_with_all_df_900.to_csv(label_res_with_all_df_900_path, index=False, encoding='utf-8-sig')
 
