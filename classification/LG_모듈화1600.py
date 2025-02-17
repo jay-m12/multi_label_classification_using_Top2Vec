@@ -5,7 +5,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.multioutput import MultiOutputClassifier
 from sklearn.metrics import f1_score, roc_curve, roc_auc_score
 
-TOPIC_SIZE = 'major'
+TOPIC_SIZE = 'minor'
 X = pd.read_csv('/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_163.csv', header=0)
 Y = pd.read_csv(f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_{TOPIC_SIZE}.csv', header=0)
 TEST900_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_900.csv'
@@ -242,10 +242,14 @@ def load_titles(title_file):
     with open(title_file, "r", encoding='utf-8') as f:
         for line in f:
             line = line.strip()
-            if '-' in line:
-                db_key, title = line.split(' - ', 1) 
-                title_dict[db_key] = title
+            if '-' in line:  # '-'이 포함된 줄만 처리
+                try:
+                    db_key, title = line.split('-', 1)
+                    title_dict[db_key] = title
+                except ValueError:
+                    print(f"Skipping line due to unexpected format: {line}")
     return title_dict
+
 
 label_res_with_prob_df_900 = pd.DataFrame({
     'DB Key': test900_ids,  
@@ -257,3 +261,21 @@ label_res_with_prob_df_900_path = f"{OUTPUT_DIR}/test_900_predictions_with_prob.
 label_res_with_prob_df_900.to_csv(label_res_with_prob_df_900_path, index=False, encoding='utf-8-sig')
 
 print(f'900개 테스트 데이터 예측 결과 저장 경로: {label_res_with_prob_df_900_path}')
+
+title_dict = load_titles(TITLE900_PATH)
+
+# 예측 라벨과 확률을 포함하여 'Title' 컬럼 추가
+label_res_with_all_df_900 = pd.DataFrame({
+    'DB Key': test900_ids,  
+    'Title': [title_dict.get(str(db_key), 'Unknown') for db_key in test900_ids],
+    'Model': 'Top2Vec-LogisticRegression',
+    'Labels': [predict_label_with_proba(row, proba_row, Y.columns) 
+               for row, proba_row in zip(Y_pred_full_900, Y_proba_full_900)],
+    
+})
+
+# 결과를 저장할 경로
+label_res_with_all_df_900_path = f"{OUTPUT_DIR}/test_900_all_labels.csv"
+label_res_with_all_df_900.to_csv(label_res_with_all_df_900_path, index=False, encoding='utf-8-sig')
+
+print(f'900개 테스트 데이터 모든 라벨 확률 예측 결과 저장 경로: {label_res_with_all_df_900_path}')
