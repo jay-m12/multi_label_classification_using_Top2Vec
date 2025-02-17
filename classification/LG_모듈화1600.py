@@ -49,7 +49,6 @@ X_test = np.stack(X_test['Embedding Vector'].values)
 Y_train = Y_train_filtered.values
 Y_test = Y_test_filtered.values
 
-# 모델 학습
 base_model = LogisticRegression(max_iter=1000, class_weight="balanced")
 model = MultiOutputClassifier(base_model)
 model.fit(X_train, Y_train)
@@ -76,14 +75,12 @@ for i in range(Y_test.shape[1]):
     optimal_threshold = float(thresholds[optimal_idx])
     optimal_thresholds.append(optimal_threshold)
 
-# 최적 임계값을 적용하여 예측
 Y_pred = np.array([
     ((proba[:, 1] >= optimal_thresholds[i]) if proba.shape[1] > 1 
      else (proba[:, 0] >= optimal_thresholds[i])).astype(int)
     for i, proba in enumerate(Y_pred_proba)
 ]).T
 
-# F1 점수 계산 (최적 임계값 기반)
 f1_micro = f1_score(Y_test, Y_pred, average="micro")
 f1_macro = f1_score(Y_test, Y_pred, average="macro")
 f1_weighted = f1_score(Y_test, Y_pred, average="weighted")
@@ -143,12 +140,10 @@ print(f"Hit@1: {hit_1:.4f}")
 print(f"Hit@3: {hit_3:.4f}")
 print(f"Hit@5: {hit_5:.4f}")
 
-
-
-
 # 예측 라벨 출력(확률값 제외) [1]==============================
 def predict_label(row, column_names):
     return ', '.join(column_names[row == 1])
+
 lable_res_df = pd.DataFrame({
     'DB Key': test_db_key,
     'Model': 'Top2Vec-LogisticRegression',
@@ -160,9 +155,6 @@ lable_res_df.to_csv(lable_res_path, index=False, encoding = 'utf-8-sig')
 
 print(f'각 문서의 라벨 예측 결과 저장 경로: {lable_res_path}')
 
-
-
-
 # 예측된 라벨과 확률을 함께 출력 (확률 내림차순 정렬 포함) [2] ==============================
 def predict_label_with_proba(row, proba_row, column_names):
     labels_with_proba = [
@@ -170,20 +162,20 @@ def predict_label_with_proba(row, proba_row, column_names):
         for i in range(len(row)) if row[i] == 1
     ]
     labels_with_proba.sort(key=lambda x: x[1], reverse=True)
-    return ','.join([f"{label}-{proba:.3f}" for label, proba in labels_with_proba])
+    return ', '.join([f"{label}-{proba:.3f}" for label, proba in labels_with_proba])
+
 lable_res_with_prob_df = pd.DataFrame({
     'DB Key': test_db_key,  
     'Model': 'Top2Vec-LogisticRegression',
     'Labels': [predict_label_with_proba(row, proba_row, Y.columns) 
-                   for row, proba_row in zip(Y_pred_full, Y_proba_full)]
+               for row, proba_row in zip(Y_pred_full, Y_proba_full)]
 })
+
 label_res_with_prob_df = pd.concat([lable_res_with_prob_df, ground_truth_df], axis=0).sort_values(by=['DB Key', 'Model'], ascending=[True, True]).reset_index(drop=True)
 lable_res_with_prob_path = f"{OUTPUT_DIR}/lr_predicted_labels_with_prob.csv"
 label_res_with_prob_df.to_csv(lable_res_with_prob_path, index=False, encoding='utf-8-sig')
 
 print(f'각 문서의 라벨 및 확률 예측 결과 저장 경로: {lable_res_with_prob_path}')
-
-
 
 # 전체 라벨 확률값 출력 [3]==============================
 def predict_all_labels_with_proba(proba_row, column_names):
@@ -193,6 +185,7 @@ def predict_all_labels_with_proba(proba_row, column_names):
     ]
     labels_with_proba.sort(key=lambda x: x[1], reverse=True)
     return ', '.join([f"{label}-{proba:.3f}" for label, proba in labels_with_proba])
+
 test_document_ids = X.loc[test_mask, 'Document ID'].values  
 total_df = pd.DataFrame({
     'DB Key': test_db_key,
@@ -206,7 +199,6 @@ total_df.to_csv(all_labels_results_path, index=False, encoding='utf-8-sig')
 
 print(f'각 문서에 대한 모든 라벨의 확률값 결과의 경로: {all_labels_results_path}')
 
-
 # 900개 전체 문서에 대한 예측된 라벨 및 확률값 추출하기 =========================================
 test900_df = pd.read_csv(TEST900_PATH, header = 0)
 
@@ -217,6 +209,7 @@ test900_ids = test900_df['Document ID'].values
 X_test_900 = np.stack(test900_df.drop(columns = ['Document ID'])['Embedding Vector'].values)
 
 Y_pred_proba_900 = model.predict_proba(X_test_900)
+
 Y_pred_900 = np.array([
     ((proba[:,1] >= optimal_thresholds[i]) if proba.shape[1] > 1
      else(proba[:,0] >= optimal_thresholds[i])).astype(int)
@@ -224,18 +217,12 @@ Y_pred_900 = np.array([
 ]).T
 
 y_proba_matrix_900 = np.hstack([proba[:, -1].reshape(-1,1) if proba.shape[1] > 1 else proba for proba in Y_pred_proba_900])
+
 Y_pred_full_900 = np.zeros((Y_pred_900.shape[0], len(Y.columns)))
 Y_pred_full_900[:, [Y.columns.get_loc(col) for col in Y_train_filtered.columns]] = Y_pred_900
-Y_proba_full_900 = np.zeros((Y_pred_900.shape[0], len(Y.columns)))
-Y_proba_full_900[:, [Y.columns.get_loc(col) for col in Y_train_filtered.columns]] = y_proba_matrix_900
 
-def predict_label_with_proba(row, proba_row, column_names):
-    labels_with_proba = [
-        (column_names[i], proba_row[i])
-        for i in range(len(row)) if row[i] == 1
-    ]
-    labels_with_proba.sort(key=lambda x: x[1], reverse=True)
-    return ', '.join([f"{label}-{proba:.3f}" for label, proba in labels_with_proba])
+Y_proba_full_900 = np.zeros((len(test900_ids), len(Y.columns)))  # 문서 개수와 라벨 개수에 맞춰 초기화
+Y_proba_full_900[:, [Y.columns.get_loc(col) for col in Y_train_filtered.columns]] = y_proba_matrix_900
 
 def load_titles(title_file):
     title_dict = {}
@@ -250,28 +237,21 @@ def load_titles(title_file):
                     print(f"Skipping line due to unexpected format: {line}")
     return title_dict
 
-
-label_res_with_prob_df_900 = pd.DataFrame({
-    'DB Key': test900_ids,  
-    'Model': 'Top2Vec-LogisticRegression',
-    'Labels': [predict_label_with_proba(row, proba_row, Y.columns) 
-               for row, proba_row in zip(Y_pred_full_900, Y_proba_full_900)]
-})
-label_res_with_prob_df_900_path = f"{OUTPUT_DIR}/test_900_predictions_with_prob.csv"
-label_res_with_prob_df_900.to_csv(label_res_with_prob_df_900_path, index=False, encoding='utf-8-sig')
-
-print(f'900개 테스트 데이터 예측 결과 저장 경로: {label_res_with_prob_df_900_path}')
+# 전체 라벨에 대한 예측 확률을 내림차순으로 정렬하여 문자열로 반환하는 함수
+def predict_all_labels_with_proba(proba_row, column_names):
+    labels_with_proba = list(zip(column_names, proba_row))  # 라벨과 확률을 튜플로 묶기
+    labels_with_proba.sort(key=lambda x: x[1], reverse=True)  # 확률값을 기준으로 내림차순 정렬
+    return ', '.join([f"{label}-{proba:.3f}" for label, proba in labels_with_proba])  # 문자열로 변환
 
 title_dict = load_titles(TITLE900_PATH)
 
 # 예측 라벨과 확률을 포함하여 'Title' 컬럼 추가
 label_res_with_all_df_900 = pd.DataFrame({
-    'DB Key': test900_ids,  
+    'DB Key': test900_ids,
     'Title': [title_dict.get(str(db_key), 'Unknown') for db_key in test900_ids],
     'Model': 'Top2Vec-LogisticRegression',
-    'Labels': [predict_label_with_proba(row, proba_row, Y.columns) 
-               for row, proba_row in zip(Y_pred_full_900, Y_proba_full_900)],
-    
+    'Labels': [predict_all_labels_with_proba(proba_row, Y.columns)
+               for proba_row in Y_proba_full_900]
 })
 
 # 결과를 저장할 경로
@@ -279,3 +259,15 @@ label_res_with_all_df_900_path = f"{OUTPUT_DIR}/test_900_all_labels.csv"
 label_res_with_all_df_900.to_csv(label_res_with_all_df_900_path, index=False, encoding='utf-8-sig')
 
 print(f'900개 테스트 데이터 모든 라벨 확률 예측 결과 저장 경로: {label_res_with_all_df_900_path}')
+
+label_res_with_prob_df_900 = pd.DataFrame({
+    'DB Key': test900_ids,  
+    'Title': [title_dict.get(str(db_key), 'Unknown') for db_key in test900_ids],
+    'Model': 'Top2Vec-LogisticRegression',
+    'Labels': [predict_label_with_proba(Y_pred_full_900[i], Y_proba_full_900[i], Y.columns) 
+               for i in range(len(test900_ids))]
+})
+label_res_with_prob_df_900_path = f"{OUTPUT_DIR}/test_900_predictions_with_prob.csv"
+label_res_with_prob_df_900.to_csv(label_res_with_prob_df_900_path, index=False, encoding='utf-8-sig')
+
+print(f'900개 테스트 데이터 예측 결과 저장 경로: {label_res_with_prob_df_900_path}')
