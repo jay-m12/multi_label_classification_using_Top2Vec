@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import os
 
-class Top2VecMLP:
+class MLP:
     def __init__(self, topic_size, X_path, Y_path, TEST900_PATH, GROUND_TRUTH, OUTPUT_DIR, TITLE900_PATH, test_db_key,
                  test_size=0.2, random_state=42, batch_size=32, num_epochs=300, patience=10):
         self.topic_size = topic_size
@@ -28,6 +28,8 @@ class Top2VecMLP:
         self.patience = patience  
         self.best_val_loss = float('inf')  
         self.epochs_without_improvement = 0  
+        self.auc_scores = []  # Store AUC scores for each class
+        self.average_auc = 0.0  # Average AUC score
 
         os.makedirs(self.OUTPUT_DIR, exist_ok=True)
 
@@ -129,19 +131,19 @@ class Top2VecMLP:
             val_loss_list.append(avg_val_loss)
             epoch_list.append(epoch + 1)
 
-            if (epoch + 1) % 5 == 0:
-                print(f'Epoch [{epoch + 1}/{self.num_epochs}], Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}')
+            # if (epoch + 1) % 5 == 0:
+            #     print(f'Epoch [{epoch + 1}/{self.num_epochs}], Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}')
 
-            if avg_val_loss < self.best_val_loss:
-                self.best_val_loss = avg_val_loss
-                self.epochs_without_improvement = 0  
-                torch.save(self.model.state_dict(), f"{self.OUTPUT_DIR}/mlp_model.pth")
-                print(f"Model improved. Model saved at epoch {epoch + 1}")
-            else:
-                self.epochs_without_improvement += 1
-                if self.epochs_without_improvement >= self.patience:
-                    print(f"Early stopping triggered at epoch {epoch + 1}")
-                    break 
+            # if avg_val_loss < self.best_val_loss:
+            #     self.best_val_loss = avg_val_loss
+            #     self.epochs_without_improvement = 0  
+            #     torch.save(self.model.state_dict(), f"{self.OUTPUT_DIR}/mlp_model.pth")
+            #     print(f"Model improved. Model saved at epoch {epoch + 1}")
+            # else:
+            #     self.epochs_without_improvement += 1
+            #     if self.epochs_without_improvement >= self.patience:
+            #         print(f"Early stopping triggered at epoch {epoch + 1}")
+            #         break 
 
         self.plot_loss(train_loss_list, val_loss_list, save_path)
 
@@ -331,6 +333,43 @@ class Top2VecMLP:
 
         print(f'각 문서에 대한 모든 라벨의 확률값 결과의 경로: {all_labels_results_path}')
 
+    def calculate_auc(self):
+        # Calculate AUC for each class
+        self.model.eval()
+        with torch.no_grad():
+            self.Y_pred_proba = self.model(torch.FloatTensor(self.X_test)).numpy()
+
+        auc_scores = []
+        for i in range(self.Y_test.shape[1]):  # Iterate through each class
+            if np.sum(self.Y_test[:, i]) == 0:
+                auc_scores.append(None)  # Skip AUC calculation for classes with no positive labels
+                continue
+
+            try:
+                auc = roc_auc_score(self.Y_test[:, i], self.Y_pred_proba[:, i])
+                auc_scores.append(auc)
+            except ValueError:
+                auc_scores.append(None)
+
+        # Remove None values (for classes that did not have positive samples)
+        valid_auc_scores = [score for score in auc_scores if score is not None]
+        self.average_auc = np.mean(valid_auc_scores) if valid_auc_scores else 0.0
+        self.auc_scores = auc_scores
+
+
+        
+        print(f"\nAverage AUC: {self.average_auc:.4f}")
+        
+    def save_auc_results(self):
+        # Save AUC results to CSV
+        auc_df = pd.DataFrame({
+            'class_name': self.Y_columns.tolist(),
+            'auc_score': self.auc_scores
+        })
+        auc_df.to_csv(f"{self.OUTPUT_DIR}/auc_scores_mlp.csv", index=False)
+        print(f"AUC results saved to '{self.OUTPUT_DIR}/auc_scores_mlp.csv'.")
+
+    # (other methods remain unchanged)
 
     def run(self):
         self.load_data()
@@ -339,6 +378,8 @@ class Top2VecMLP:
         self.calculate_optimal_thresholds()
         self.calculate_performance_metrics()
         self.calculate_hits()
+        self.calculate_auc()  # Ensure this line is called
+        self.save_auc_results()  # Ensure AUC results are saved
         self.save_results()  
         self.save_test900_results()
 
@@ -354,7 +395,7 @@ if __name__ == "__main__":
     test_db_key = [453073, 453074, 453075, 453076, 453077, 453078, 453079, 453082, 453083, 453084, 453093,
                     453095, 453096, 453097, 452970, 453102, 453104, 453105, 453110, 453114, 453116]
 
-    mlp = Top2VecMLP(
+    mlp = MLP(
         TOPIC_SIZE, X_PATH, Y_PATH, TEST900_PATH, GROUND_TRUTH, OUTPUT_DIR, TITLE900_PATH, test_db_key
     )
     mlp.run()

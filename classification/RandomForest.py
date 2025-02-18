@@ -288,7 +288,7 @@ class Top2VecRandomForest:
         self.save_results()
 
 if __name__ == "__main__":
-    TOPIC_SIZE = 'major'
+    TOPIC_SIZE = 'minor'
     X_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_163.csv'
     Y_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_{TOPIC_SIZE}.csv'
     TEST900_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_900.csv'
