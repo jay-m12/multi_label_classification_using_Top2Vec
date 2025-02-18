@@ -28,12 +28,14 @@ class Top2VecMLP:
         self.patience = patience  
         self.best_val_loss = float('inf')  
         self.epochs_without_improvement = 0  
-        
+
         os.makedirs(self.OUTPUT_DIR, exist_ok=True)
 
         self.X, self.Y, self.X_train, self.X_val, self.X_test, self.Y_train, self.Y_val, self.Y_test, \
         self.scaler, self.model, self.criterion, self.optimizer, self.train_loader, self.val_loader, \
         self.optimal_thresholds, self.Y_pred, self.Y_pred_proba = [None] * 17
+
+        self.ground_truth_df = pd.read_csv(GROUND_TRUTH, encoding='utf-8-sig')
 
     def load_data(self):
         X = pd.read_csv(self.X_path, header=0)
@@ -45,7 +47,7 @@ class Top2VecMLP:
             lambda x: np.array(list(map(float, x.strip('[]').split(','))))
         )
 
-        test_mask = (X['Document ID'] >= 138) & (X['Document ID'] <= 162)
+        test_mask = (X['Document ID'] >= 138) & (X['Document ID'] <= 158)
         self.X_test = X[test_mask]
         self.Y_test = Y[test_mask].values
 
@@ -287,15 +289,59 @@ class Top2VecMLP:
         plt.close()
         print(f'Loss plot saved to {save_path}')
 
+    def save_results(self):
+        lable_res_df = pd.DataFrame({
+            'DB Key': self.test_db_key,
+            'Model': 'Top2Vec-MLP',
+            'Labels': [self.predict_label(row, self.Y_columns) for row in self.Y_pred]
+        })
+        lable_res_df = pd.concat([lable_res_df, self.ground_truth_df], axis=0).sort_values(by=['DB Key', 'Model'],
+                                                                                            ascending=[True, True]).reset_index(
+            drop=True)
+        lable_res_path = f"{self.OUTPUT_DIR}/mlp_predicted_labels.csv"
+        lable_res_df.to_csv(lable_res_path, index=False, encoding='utf-8-sig')
+
+        print(f'각 문서의 라벨 예측 결과 저장 경로: {lable_res_path}')
+
+        lable_res_with_prob_df = pd.DataFrame({
+            'DB Key': self.test_db_key,
+            'Model': 'Top2Vec-MLP',
+            'Labels': [self.predict_label_with_proba(row, proba_row, self.Y_columns)
+                    for row, proba_row in zip(self.Y_pred, self.Y_pred_proba)]
+        })
+
+        label_res_with_prob_df = pd.concat([lable_res_with_prob_df, self.ground_truth_df], axis=0).sort_values(
+            by=['DB Key', 'Model'], ascending=[True, True]).reset_index(drop=True)
+        lable_res_with_prob_path = f"{self.OUTPUT_DIR}/mlp_predicted_labels_with_prob.csv"
+        label_res_with_prob_df.to_csv(lable_res_with_prob_path, index=False, encoding='utf-8-sig')
+
+        print(f'각 문서의 라벨 및 확률 예측 결과 저장 경로: {lable_res_with_prob_path}')
+
+        total_df = pd.DataFrame({
+            'DB Key': self.test_db_key,
+            'Model': 'Top2Vec-MLP',
+            'Labels': [self.predict_all_labels_with_proba(proba_row, self.Y_columns)
+                    for proba_row in self.Y_pred_proba]
+        })
+        total_df = pd.concat([total_df, self.ground_truth_df], axis=0).sort_values(by=['DB Key', 'Model'],
+                                                                                    ascending=[True, True]).reset_index(
+            drop=True)
+        all_labels_results_path = f"{self.OUTPUT_DIR}/mlp_predicted_all_labels.csv"
+        total_df.to_csv(all_labels_results_path, index=False, encoding='utf-8-sig')
+
+        print(f'각 문서에 대한 모든 라벨의 확률값 결과의 경로: {all_labels_results_path}')
+
 
     def run(self):
         self.load_data()
         save_path = f'{self.OUTPUT_DIR}/loss_plot.png'
-        self.train_model(save_path)  
+        self.train_model(save_path)
         self.calculate_optimal_thresholds()
         self.calculate_performance_metrics()
         self.calculate_hits()
+        self.save_results()  
         self.save_test900_results()
+
 
 if __name__ == "__main__":
     TOPIC_SIZE = 'minor'
