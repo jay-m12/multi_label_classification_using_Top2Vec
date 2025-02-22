@@ -91,15 +91,15 @@ class Top2VecProcessor:  # 모델이 학습한 문서 및 단어에 대한 임�
             if word not in vocab:
                 raise ValueError(f"'{word}' 단어가 어휘에 없습니다.")
 
-        민간_vector = word_vectors[vocab.index("민간")]
-        공공_vector = word_vectors[vocab.index("공공")]
-        대표성_vector = word_vectors[vocab.index("대표성")]
+        private_vector = word_vectors[vocab.index("민간")]
+        public_vector = word_vectors[vocab.index("공공")]
+        represent_vector = word_vectors[vocab.index("대표성")]
         
-        민간_대표성_vector = (민간_vector + 대표성_vector) / 2
-        공공_대표성_vector = (공공_vector + 대표성_vector) / 2
+        private_represent_vector = (private_vector + represent_vector) / 2
+        public_represent_vector = (public_vector + represent_vector) / 2
         
         new_words = ["민간대표성", "공공대표성"]
-        new_vectors = np.vstack([민간_대표성_vector, 공공_대표성_vector])
+        new_vectors = np.vstack([private_represent_vector, public_represent_vector])
         
         self.word_vectors_updated = np.vstack([word_vectors, new_vectors])
         self.vocab_updated = vocab + new_words
@@ -151,7 +151,6 @@ class Top2VecProcessor:  # 모델이 학습한 문서 및 단어에 대한 임�
         self.add_custom_word_embeddings()
         self.save_embeddings()
         self.save_document_topics()
-
 
 class Doc2VecInference:
     def __init__(self, model_path, output_dir):
