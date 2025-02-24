@@ -3,10 +3,9 @@ import pandas as pd
 import os
 from sklearn.linear_model import LogisticRegression
 from sklearn.multioutput import MultiOutputClassifier
-from sklearn.metrics import f1_score, roc_curve, roc_auc_score
+from sklearn.metrics import f1_score, roc_curve, roc_auc_score, precision_score, recall_score
 
 # === 설정 ==================================================================
-
 
 DOCUMENT_EMBEDDINGS_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_163.csv'
 TEST900_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_900.csv'
@@ -131,7 +130,7 @@ for doc_idx in range(X_test.shape[0]):
         if Y_major_pred[doc_idx, class_idx] == 0:
             minor_class_indices = get_minor_classes(class_idx)
             for minor_class_idx in minor_class_indices:
-                Y_minor_pred_proba[minor_class_idx][doc_idx, 1] = -1000000000
+                Y_minor_pred_proba[minor_class_idx][doc_idx, 1] = -1000000000   # 음의 무한대로 설정할 경우 오류 발생
 
 
 minor_optimal_thresholds = []
@@ -154,56 +153,7 @@ Y_minor_pred = np.array([
 ]).T
 
 # === 결과 평가 및 저장 =========================================================
-f1_micro = f1_score(Y_minor_test, Y_minor_pred, average="micro")
-f1_macro = f1_score(Y_minor_test, Y_minor_pred, average="macro")
-f1_weighted = f1_score(Y_minor_test, Y_minor_pred, average="weighted")
-
-print(f"Micro F1 Score (Optimal Threshold): {f1_micro:.4f}")
-print(f"Macro F1 Score (Optimal Threshold): {f1_macro:.4f}")
-print(f"Weighted F1 Score (Optimal Threshold): {f1_weighted:.4f}")
-
-auc_scores = []
-for i in range(Y_minor_test.shape[1]):
-    if np.sum(Y_minor_test[:, i]) == 0:
-        auc_scores.append(None)
-        continue
-    
-    class_prob = Y_minor_pred_proba[i][:, 1]
-    
-    try:
-        auc = roc_auc_score(Y_minor_test[:, i], class_prob)
-        auc_scores.append(auc)
-    except ValueError:
-        auc_scores.append(None)
-
-valid_auc_scores = [score for score in auc_scores if score is not None]
-average_auc = np.mean(valid_auc_scores)
-print(f"Average AUC: {average_auc:.4f}")
-
-y_proba_matrix = np.hstack([proba[:, -1].reshape(-1,1) if proba.shape[1] > 1 else proba for proba in Y_minor_pred_proba])
-
-Y_minor_pred_full = np.zeros((Y_minor_pred.shape[0], len(Y_minor.columns)))
-Y_minor_pred_full[:, [Y_minor.columns.get_loc(col) for col in Y_minor_train_filtered.columns]] = Y_minor_pred
-Y_proba_full = np.zeros((Y_minor_pred.shape[0], len(Y_minor.columns)))
-Y_proba_full[:, [Y_minor.columns.get_loc(col) for col in Y_minor_train_filtered.columns]] = y_proba_matrix
-
-def hit_at_k(y_true, y_proba, k):
-    hits = 0
-    for true, proba in zip(y_true, y_proba):
-        top_k_indices = np.argsort(proba)[-k:][::-1]
-        if any(true[i] == 1 for i in top_k_indices):
-            hits += 1
-    return hits / len(y_true)
-
-hit_1 = hit_at_k(Y_minor_test, y_proba_matrix, 1)
-hit_3 = hit_at_k(Y_minor_test, y_proba_matrix, 3)
-hit_5 = hit_at_k(Y_minor_test, y_proba_matrix, 5)
-
-print(f"Hit@1: {hit_1:.4f}")
-print(f"Hit@3: {hit_3:.4f}")
-print(f"Hit@5: {hit_5:.4f}")
-
-# ===== 대분류 예측 일치 여부에 따른 중분류 성능 평가 =====
+# ===== 대분류 결과 측정 =====
 major_match_idx = []
 major_mismatch_idx = []
 for i in range(Y_major_test.shape[0]):
@@ -217,50 +167,83 @@ print(f"대분류 예측 정답과 완벽하게 일치한 문서 수: {len(major
 print(f"대분류 예측이 하나라도 다른 문서 수: {len(major_mismatch_idx)}")
 print("대분류가 맞은 문서의 행 번호:", major_match_idx)
 
-# 대분류 예측이 정확한 문서에 대한 중분류 성능
+y_proba_matrix = np.hstack([proba[:, -1].reshape(-1,1) if proba.shape[1] > 1 else proba for proba in Y_minor_pred_proba])
+
+Y_minor_pred_full = np.zeros((Y_minor_pred.shape[0], len(Y_minor.columns)))
+Y_minor_pred_full[:, [Y_minor.columns.get_loc(col) for col in Y_minor_train_filtered.columns]] = Y_minor_pred
+Y_proba_full = np.zeros((Y_minor_pred.shape[0], len(Y_minor.columns)))
+Y_proba_full[:, [Y_minor.columns.get_loc(col) for col in Y_minor_train_filtered.columns]] = y_proba_matrix
+
+
+
+def evaluate_performance(Y_true, Y_pred, y_proba, description="전체"):
+    f1_micro = f1_score(Y_true, Y_pred, average="micro", zero_division=0)
+    f1_macro = f1_score(Y_true, Y_pred, average="macro", zero_division=0)
+    f1_weighted = f1_score(Y_true, Y_pred, average="weighted", zero_division=0)
+    
+    precision_micro = precision_score(Y_true, Y_pred, average="micro", zero_division=0)
+    recall_micro = recall_score(Y_true, Y_pred, average="micro", zero_division=0)
+    precision_macro = precision_score(Y_true, Y_pred, average="macro", zero_division=0)
+    recall_macro = recall_score(Y_true, Y_pred, average="macro", zero_division=0)
+    precision_weighted = precision_score(Y_true, Y_pred, average="weighted", zero_division=0)
+    recall_weighted = recall_score(Y_true, Y_pred, average="weighted", zero_division=0)
+    
+
+    def hit_at_k(y_true, y_proba, k):
+        hits = 0
+        for true, proba in zip(y_true, y_proba):
+            top_k_indices = np.argsort(proba)[-k:][::-1]
+            if any(true[i] == 1 for i in top_k_indices):
+                hits += 1
+        return hits / len(y_true)
+
+    hit1 = hit_at_k(Y_true, y_proba, 1)
+    hit3 = hit_at_k(Y_true, y_proba, 3)
+    hit5 = hit_at_k(Y_true, y_proba, 5)
+    
+    auc_scores = []
+    for i in range(Y_true.shape[1]):
+        unique_labels = np.unique(Y_true[:, i])
+        if unique_labels.size < 2:
+            continue  
+        try:
+            auc = roc_auc_score(Y_true[:, i], y_proba[:, i])
+            auc_scores.append(auc)
+        except ValueError:
+            continue
+    average_auc = np.mean(auc_scores) if auc_scores else None
+
+    print(f"\n=== [{description} 성능] ===")
+    print(f"Micro F1: {f1_micro:.4f}")
+    print(f"Macro F1: {f1_macro:.4f}")
+    print(f"Weighted F1: {f1_weighted:.4f}")
+    print(f"Micro Precision: {precision_micro:.4f}")
+    print(f"Micro Recall: {recall_micro:.4f}")
+    print(f"Macro Precision: {precision_macro:.4f}")
+    print(f"Macro Recall: {recall_macro:.4f}")
+    print(f"Weighted Precision: {precision_weighted:.4f}")
+    print(f"Weighted Recall: {recall_weighted:.4f}")
+    print(f"Average AUC: {average_auc:.4f}")
+    print(f"Hit@1: {hit1:.4f}")
+    print(f"Hit@3: {hit3:.4f}")
+    print(f"Hit@5: {hit5:.4f}")
+
+# 전체 소분류 성능 평가
+evaluate_performance(Y_minor_test, Y_minor_pred, y_proba_matrix, description="전체 소분류")
+
+# 대분류 예측이 정확한 문서에 대한 평가
 if len(major_match_idx) > 0:
-    Y_minor_test_match = Y_minor_test[major_match_idx]
-    Y_minor_pred_match = Y_minor_pred[major_match_idx]
-    y_proba_match = y_proba_matrix[major_match_idx]
+    evaluate_performance(Y_minor_test[major_match_idx], Y_minor_pred[major_match_idx], 
+                         y_proba_matrix[major_match_idx], description="대분류 일치 문서 소분류")
 
-    f1_micro_match = f1_score(Y_minor_test_match, Y_minor_pred_match, average="micro")
-    f1_macro_match = f1_score(Y_minor_test_match, Y_minor_pred_match, average="macro")
-    f1_weighted_match = f1_score(Y_minor_test_match, Y_minor_pred_match, average="weighted")
-    hit1_match = hit_at_k(Y_minor_test_match, y_proba_match, 1)
-    hit3_match = hit_at_k(Y_minor_test_match, y_proba_match, 3)
-    hit5_match = hit_at_k(Y_minor_test_match, y_proba_match, 5)
-
-    print("\n=== [대분류 예측 정확 문서에 대한 중분류 성능] ===")
-    print(f"Micro F1: {f1_micro_match:.4f}")
-    print(f"Macro F1: {f1_macro_match:.4f}")
-    print(f"Weighted F1: {f1_weighted_match:.4f}")
-    print(f"Hit@1: {hit1_match:.4f}")
-    print(f"Hit@3: {hit3_match:.4f}")
-    print(f"Hit@5: {hit5_match:.4f}")
-
-# 대분류 예측이 하나라도 틀린 문서에 대한 중분류 성능
+# 대분류 예측이 하나라도 틀린 문서에 대한 평가
 if len(major_mismatch_idx) > 0:
-    Y_minor_test_mismatch = Y_minor_test[major_mismatch_idx]
-    Y_minor_pred_mismatch = Y_minor_pred[major_mismatch_idx]
-    y_proba_mismatch = y_proba_matrix[major_mismatch_idx]
-
-    f1_micro_mismatch = f1_score(Y_minor_test_mismatch, Y_minor_pred_mismatch, average="micro")
-    f1_macro_mismatch = f1_score(Y_minor_test_mismatch, Y_minor_pred_mismatch, average="macro")
-    f1_weighted_mismatch = f1_score(Y_minor_test_mismatch, Y_minor_pred_mismatch, average="weighted")
-    hit1_mismatch = hit_at_k(Y_minor_test_mismatch, y_proba_mismatch, 1)
-    hit3_mismatch = hit_at_k(Y_minor_test_mismatch, y_proba_mismatch, 3)
-    hit5_mismatch = hit_at_k(Y_minor_test_mismatch, y_proba_mismatch, 5)
-
-    print("\n=== [대분류 예측이 하나라도 틀린 문서에 대한 중분류 성능] ===")
-    print(f"Micro F1: {f1_micro_mismatch:.4f}")
-    print(f"Macro F1: {f1_macro_mismatch:.4f}")
-    print(f"Weighted F1: {f1_weighted_mismatch:.4f}")
-    print(f"Hit@1: {hit1_mismatch:.4f}")
-    print(f"Hit@3: {hit3_mismatch:.4f}")
-    print(f"Hit@5: {hit5_mismatch:.4f}")
+    evaluate_performance(Y_minor_test[major_mismatch_idx], Y_minor_pred[major_mismatch_idx], 
+                         y_proba_matrix[major_mismatch_idx], description="대분류 불일치 문서 소분류")
 
 
 # === 결과 저장 ===============================================================
+# === 결과1 - 정답으로 분류된 라벨(중분류)만 출력 =======================================
 def predict_label(row, column_names):
     return ', '.join(column_names[row == 1])
 
@@ -272,7 +255,6 @@ pred_minor_df = pd.DataFrame({
 })
 gt_minor_df = pd.read_csv(MINOR_GROUND_TRUTH, encoding='utf-8-sig')
 
-# 입력된 순서대로 예측 결과와 GT를 번갈아 배치 (즉, 한 DB Key에 대해 먼저 예측 결과, 그 다음 GT)
 interleaved_minor = []
 for i in range(len(TEST_DB_KEY)):
     interleaved_minor.append(pred_minor_df.iloc[i])
@@ -284,7 +266,7 @@ combined_minor_df.to_csv(lable_res_path, index=False, encoding='utf-8-sig')
 print(f'각 문서의 소분류 라벨 예측 결과 저장 경로: {lable_res_path}')
 
 
-
+# === 결과2 - 정답으로 분류된 라벨과 확률 출력 =======================================
 def predict_label_with_proba(row, proba_row, column_names):
     labels_with_proba = [
         (column_names[i], proba_row[i])
@@ -300,7 +282,6 @@ pred_minor_prob_df = pd.DataFrame({
                for row, proba_row in zip(Y_minor_pred_full, Y_proba_full)],
     'Label': [''] * len(TEST_DB_KEY)
 })
-# GT는 동일한 파일 사용 (원본 순서 그대로)
 gt_minor_df = pd.read_csv(MINOR_GROUND_TRUTH, encoding='utf-8-sig')
 
 interleaved_minor_prob = []
@@ -314,7 +295,7 @@ combined_minor_prob_df.to_csv(lable_res_with_prob_path, index=False, encoding='u
 print(f'각 문서의 라벨 및 확률 예측 결과 저장 경로: {lable_res_with_prob_path}')
 
 
-
+# === 결과3 - 모든 라벨의 확률값 출력 =======================================
 def predict_all_labels_with_proba(proba_row, column_names):
     labels_with_proba = [
         (column_names[i], proba_row[i])
@@ -343,11 +324,10 @@ combined_minor_all_df.to_csv(all_labels_results_path, index=False, encoding='utf
 print(f'각 문서에 대한 모든 라벨의 확률값 결과의 경로: {all_labels_results_path}')
 
 
-
+# === 결과4 - 정답으로 분류된 라벨(대분류)만 출력 =======================================
 Y_major_pred_full = np.zeros((Y_major_pred.shape[0], len(Y_major.columns)))
 Y_major_pred_full[:, [Y_major.columns.get_loc(col) for col in Y_major_train_filtered.columns]] = Y_major_pred
 
-# 예측 결과 DataFrame 생성 (Label 컬럼은 빈 문자열로 채움)
 pred_major_df = pd.DataFrame({
     'DB Key': TEST_DB_KEY,
     'Model': 'Top2Vec-LogisticRegression',
@@ -355,10 +335,8 @@ pred_major_df = pd.DataFrame({
     'Label': [''] * len(TEST_DB_KEY)
 })
 
-# GT DataFrame은 그대로 로드 (파일의 순서를 유지)
 gt_major_df = pd.read_csv(MAJOR_GROUND_TRUTH, encoding='utf-8-sig')
 
-# 두 DataFrame을 번갈아(교차) 결합합니다.
 interleaved_rows = []
 n = len(TEST_DB_KEY)
 for i in range(n):
@@ -369,4 +347,5 @@ combined_major_df = pd.DataFrame(interleaved_rows)
 major_label_res_path = f"{OUTPUT_DIR}/lr_predicted_major_labels.csv"
 combined_major_df.to_csv(major_label_res_path, index=False, encoding='utf-8-sig')
 
-print(f'각 문서의 대분류 라벨 예측 결과(예측과 GT가 번갈아 출력됨) 저장 경로: {major_label_res_path}')
+print(f'각 문서의 대분류 라벨 예측 결과 저장 경로: {major_label_res_path}')
+
