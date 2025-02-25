@@ -153,7 +153,6 @@ Y_minor_pred = np.array([
 ]).T
 
 # === 결과 평가 및 저장 =========================================================
-# ===== 대분류 결과 측정 =====
 major_match_idx = []
 major_mismatch_idx = []
 for i in range(Y_major_test.shape[0]):
@@ -228,18 +227,18 @@ def evaluate_performance(Y_true, Y_pred, y_proba, description="전체"):
     print(f"Hit@3: {hit3:.4f}")
     print(f"Hit@5: {hit5:.4f}")
 
-# 전체 소분류 성능 평가
-evaluate_performance(Y_minor_test, Y_minor_pred, y_proba_matrix, description="전체 소분류")
+# 전체 중분류 성능 평가
+evaluate_performance(Y_minor_test, Y_minor_pred, y_proba_matrix, description="계층적 중분류")
 
 # 대분류 예측이 정확한 문서에 대한 평가
 if len(major_match_idx) > 0:
     evaluate_performance(Y_minor_test[major_match_idx], Y_minor_pred[major_match_idx], 
-                         y_proba_matrix[major_match_idx], description="대분류 일치 문서 소분류")
+                         y_proba_matrix[major_match_idx], description="대분류 일치 문서 중분류")
 
 # 대분류 예측이 하나라도 틀린 문서에 대한 평가
 if len(major_mismatch_idx) > 0:
     evaluate_performance(Y_minor_test[major_mismatch_idx], Y_minor_pred[major_mismatch_idx], 
-                         y_proba_matrix[major_mismatch_idx], description="대분류 불일치 문서 소분류")
+                         y_proba_matrix[major_mismatch_idx], description="대분류 불일치 문서 중분류")
 
 
 # === 결과 저장 ===============================================================
@@ -263,7 +262,7 @@ combined_minor_df = pd.DataFrame(interleaved_minor)
 
 lable_res_path = f"{OUTPUT_DIR}/lr_predicted_labels.csv"
 combined_minor_df.to_csv(lable_res_path, index=False, encoding='utf-8-sig')
-print(f'각 문서의 소분류 라벨 예측 결과 저장 경로: {lable_res_path}')
+print(f'각 문서의 중분류 라벨 예측 결과 저장 경로: {lable_res_path}')
 
 
 # === 결과2 - 정답으로 분류된 라벨과 확률 출력 =======================================
