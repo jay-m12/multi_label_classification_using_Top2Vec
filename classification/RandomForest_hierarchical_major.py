@@ -1,12 +1,11 @@
 import numpy as np
 import pandas as pd
 import os
-from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.multioutput import MultiOutputClassifier
 from sklearn.metrics import f1_score, roc_curve, roc_auc_score, precision_score, recall_score
 
 # === 설정 ==================================================================
-
 DOCUMENT_EMBEDDINGS_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_163.csv'
 TEST900_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_900.csv'
 TITLE900_PATH = '/home/women/doyoung/Top2Vec/preprocessing/input/title_900.txt'
@@ -14,7 +13,7 @@ TITLE900_PATH = '/home/women/doyoung/Top2Vec/preprocessing/input/title_900.txt'
 MAJOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/major_GT.csv'
 MINOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/minor_GT.csv'
 
-OUTPUT_DIR = f'/home/women/doyoung/Top2Vec/classification/output/LogisticRegression/hierarchical'
+OUTPUT_DIR = f'/home/women/doyoung/Top2Vec/classification/output/RandomForest/hierarchical'
 
 Y_MAJOR_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_major.csv'
 Y_MINOR_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_minor.csv'
@@ -38,7 +37,7 @@ test_mask = (X['Document ID'] >= 138) & (X['Document ID'] <= 158)
 X_test = X[test_mask].copy()
 X_train = X[~test_mask].copy()
 
-Y_major_test = Y_major.loc[test_mask].copy()   # GT
+Y_major_test = Y_major.loc[test_mask].copy()   # Ground Truth
 Y_major_train = Y_major.loc[~test_mask].copy()
 Y_minor_test = Y_minor.loc[test_mask].copy()
 Y_minor_train = Y_minor.loc[~test_mask].copy()
@@ -47,7 +46,6 @@ Y_minor_train = Y_minor.loc[~test_mask].copy()
 major_single_class_cols = [col for col in Y_major.columns if Y_major_train[col].nunique() == 1]
 Y_major_train_filtered = Y_major_train.drop(columns=major_single_class_cols)
 Y_major_test_filtered = Y_major_test.drop(columns=major_single_class_cols)
-
 print(f"[대분류] 제거된 컬럼 수: {len(major_single_class_cols)}/{Y_major.shape[1]}")
 print("[대분류] 제거된 컬럼 목록:", major_single_class_cols)
 
@@ -55,7 +53,6 @@ print("[대분류] 제거된 컬럼 목록:", major_single_class_cols)
 minor_single_class_cols = [col for col in Y_minor.columns if Y_minor_train[col].nunique() == 1]
 Y_minor_train_filtered = Y_minor_train.drop(columns=minor_single_class_cols)
 Y_minor_test_filtered = Y_minor_test.drop(columns=minor_single_class_cols)
-
 print(f"[중분류] 제거된 컬럼 수: {len(minor_single_class_cols)}/{Y_minor.shape[1]}")
 print("[중분류] 제거된 컬럼 목록:", minor_single_class_cols)
 
@@ -70,10 +67,10 @@ Y_minor_train = Y_minor_train_filtered.values
 Y_minor_test = Y_minor_test_filtered.values
 
 # === 대분류 모델 학습 및 예측 ===================================================
-major_base_model = LogisticRegression(max_iter=1000, class_weight="balanced")
+# 기존 로지스틱 회귀 모델 대신 RandomForestClassifier 사용
+major_base_model = RandomForestClassifier(n_estimators=100, class_weight="balanced", random_state=42)
 major_model = MultiOutputClassifier(major_base_model)
 major_model.fit(X_train, Y_major_train)
-
 Y_major_pred_proba = major_model.predict_proba(X_test)
 
 major_optimal_thresholds = []
@@ -81,10 +78,10 @@ for i in range(Y_major_test.shape[1]):
     if np.sum(Y_major_test[:, i]) == 0:
         major_optimal_thresholds.append(0.3)
         continue
-    
+
     n_classes = Y_major_pred_proba[i].shape[1]
     class_prob = Y_major_pred_proba[i][:, 1] if n_classes >= 2 else Y_major_pred_proba[i][:, 0]
-    
+
     fpr, tpr, thresholds = roc_curve(Y_major_test[:, i], class_prob)
     youdens_j = tpr - fpr
     optimal_idx = np.argmax(youdens_j)
@@ -98,10 +95,10 @@ Y_major_pred = np.array([
 ]).T
 
 # === 중분류 모델 학습 및 예측 ===================================================
-minor_base_model = LogisticRegression(max_iter=1000, class_weight="balanced")
+# 기존 로지스틱 회귀 모델 대신 RandomForestClassifier 사용
+minor_base_model = RandomForestClassifier(n_estimators=100, class_weight="balanced", random_state=42)
 minor_model = MultiOutputClassifier(minor_base_model)
 minor_model.fit(X_train, Y_minor_train)
-
 Y_minor_pred_proba = minor_model.predict_proba(X_test)
 
 # === 대분류-중분류 매핑 ==================================================
@@ -125,22 +122,20 @@ def get_minor_classes(major_class_idx):
     minor_class_indices = [Y_minor_train_filtered.columns.get_loc(col) for col in minor_classes if col in Y_minor_train_filtered.columns]
     return minor_class_indices
 
-for doc_idx in range(X_test.shape[0]): 
-    for class_idx in range(Y_major_pred.shape[1]):  
+for doc_idx in range(X_test.shape[0]):
+    for class_idx in range(Y_major_pred.shape[1]):
         if Y_major_pred[doc_idx, class_idx] == 0:
             minor_class_indices = get_minor_classes(class_idx)
             for minor_class_idx in minor_class_indices:
-                Y_minor_pred_proba[minor_class_idx][doc_idx, 1] = -1000000000   # 음의 무한대로 설정할 경우 오류 발생
-
+                Y_minor_pred_proba[minor_class_idx][doc_idx, 1] = -1000000000
 
 minor_optimal_thresholds = []
 for i in range(len(Y_minor_pred_proba)):
     if np.sum(Y_minor_test[:, i]) == 0:
         minor_optimal_thresholds.append(0.3)
         continue
-    
-    class_prob = Y_minor_pred_proba[i][:, 1]  
-    
+
+    class_prob = Y_minor_pred_proba[i][:, 1]
     fpr, tpr, thresholds = roc_curve(Y_minor_test[:, i], class_prob)
     youdens_j = tpr - fpr
     optimal_idx = np.argmax(youdens_j)
@@ -151,6 +146,7 @@ Y_minor_pred = np.array([
     (proba[:, 1] >= minor_optimal_thresholds[i]).astype(int)
     for i, proba in enumerate(Y_minor_pred_proba)
 ]).T
+
 
 # === 결과 평가 및 저장 =========================================================
 major_match_idx = []
@@ -252,7 +248,7 @@ def predict_label(row, column_names):
 
 pred_minor_df = pd.DataFrame({
     'DB Key': TEST_DB_KEY,
-    'Model': 'Top2Vec-LogisticRegression',
+    'Model': 'Top2Vec-RandomForest',
     'Labels': [predict_label(row, Y_minor.columns) for row in Y_minor_pred_full],
     'Label': [''] * len(TEST_DB_KEY)
 })
@@ -264,7 +260,7 @@ for i in range(len(TEST_DB_KEY)):
     interleaved_minor.append(gt_minor_df.iloc[i])
 combined_minor_df = pd.DataFrame(interleaved_minor)
 
-lable_res_path = f"{OUTPUT_DIR}/lr_predicted_labels.csv"
+lable_res_path = f"{OUTPUT_DIR}/RandomForest_predicted_labels.csv"
 combined_minor_df.to_csv(lable_res_path, index=False, encoding='utf-8-sig')
 print(f'각 문서의 중분류 라벨 예측 결과 저장 경로: {lable_res_path}')
 
@@ -280,7 +276,7 @@ def predict_label_with_proba(row, proba_row, column_names):
 
 pred_minor_prob_df = pd.DataFrame({
     'DB Key': TEST_DB_KEY,
-    'Model': 'Top2Vec-LogisticRegression',
+    'Model': 'Top2Vec-RandomForest',
     'Labels': [predict_label_with_proba(row, proba_row, Y_minor.columns)
                for row, proba_row in zip(Y_minor_pred_full, Y_proba_full)],
     'Label': [''] * len(TEST_DB_KEY)
@@ -293,7 +289,7 @@ for i in range(len(TEST_DB_KEY)):
     interleaved_minor_prob.append(gt_minor_df.iloc[i])
 combined_minor_prob_df = pd.DataFrame(interleaved_minor_prob)
 
-lable_res_with_prob_path = f"{OUTPUT_DIR}/lr_predicted_labels_with_prob.csv"
+lable_res_with_prob_path = f"{OUTPUT_DIR}/RandomForest_predicted_labels_with_prob.csv"
 combined_minor_prob_df.to_csv(lable_res_with_prob_path, index=False, encoding='utf-8-sig')
 print(f'각 문서의 라벨 및 확률 예측 결과 저장 경로: {lable_res_with_prob_path}')
 
@@ -309,7 +305,7 @@ def predict_all_labels_with_proba(proba_row, column_names):
 
 pred_minor_all_df = pd.DataFrame({
     'DB Key': TEST_DB_KEY,
-    'Model': 'Top2Vec-LogisticRegression',
+    'Model': 'Top2Vec-RandomForest',
     'Labels': [predict_all_labels_with_proba(proba_row, Y_minor.columns)
                for proba_row in Y_proba_full],
     'Label': [''] * len(TEST_DB_KEY)
@@ -322,7 +318,7 @@ for i in range(len(TEST_DB_KEY)):
     interleaved_minor_all.append(gt_minor_df.iloc[i])
 combined_minor_all_df = pd.DataFrame(interleaved_minor_all)
 
-all_labels_results_path = f"{OUTPUT_DIR}/lr_predicted_all_labels.csv"
+all_labels_results_path = f"{OUTPUT_DIR}/RandomForest_predicted_all_labels.csv"
 combined_minor_all_df.to_csv(all_labels_results_path, index=False, encoding='utf-8-sig')
 print(f'각 문서에 대한 모든 라벨의 확률값 결과의 경로: {all_labels_results_path}')
 
@@ -333,7 +329,7 @@ Y_major_pred_full[:, [Y_major.columns.get_loc(col) for col in Y_major_train_filt
 
 pred_major_df = pd.DataFrame({
     'DB Key': TEST_DB_KEY,
-    'Model': 'Top2Vec-LogisticRegression',
+    'Model': 'Top2Vec-RandomForest',
     'Labels': [predict_label(row, Y_major.columns) for row in Y_major_pred_full],
     'Label': [''] * len(TEST_DB_KEY)
 })
@@ -347,7 +343,7 @@ for i in range(n):
     interleaved_rows.append(gt_major_df.iloc[i])
 combined_major_df = pd.DataFrame(interleaved_rows)
 
-major_label_res_path = f"{OUTPUT_DIR}/lr_predicted_major_labels.csv"
+major_label_res_path = f"{OUTPUT_DIR}/RandomForest_predicted_major_labels.csv"
 combined_major_df.to_csv(major_label_res_path, index=False, encoding='utf-8-sig')
 
 print(f'각 문서의 대분류 라벨 예측 결과 저장 경로: {major_label_res_path}')

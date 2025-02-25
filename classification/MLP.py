@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import f1_score, roc_curve, roc_auc_score
+from sklearn.metrics import f1_score, roc_curve, roc_auc_score, precision_score, recall_score
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import os
@@ -181,6 +181,21 @@ class MLP:
         })
         optimal_thresholds_df.to_csv(f"{self.OUTPUT_DIR}/optimal_thresholds_mlp.csv", index=False)
         print(f"\nOptimal thresholds saved to '{self.OUTPUT_DIR}/optimal_thresholds_mlp.csv'.")
+
+        precision_micro = precision_score(self.Y_test, self.Y_pred, average="micro", zero_division=0)
+        recall_micro = recall_score(self.Y_test, self.Y_pred, average="micro", zero_division=0)
+        precision_macro = precision_score(self.Y_test, self.Y_pred, average="macro", zero_division=0)
+        recall_macro = recall_score(self.Y_test, self.Y_pred, average="macro", zero_division=0)
+        precision_weighted = precision_score(self.Y_test, self.Y_pred, average="weighted", zero_division=0)
+        recall_weighted = recall_score(self.Y_test, self.Y_pred, average="weighted", zero_division=0)
+        
+        print('-------[Precision/Recall]-------')
+        print(f"Micro Precision: {precision_micro:.4f}")
+        print(f"Micro Recall: {recall_micro:.4f}")
+        print(f"Macro Precision: {precision_macro:.4f}")
+        print(f"Macro Recall: {recall_macro:.4f}")
+        print(f"Weighted Precision: {precision_weighted:.4f}")
+        print(f"Weighted Recall: {recall_weighted:.4f}")
 
     
     def calculate_hit_at_k(self, y_true, y_proba, k):
@@ -385,7 +400,7 @@ class MLP:
 
 
 if __name__ == "__main__":
-    TOPIC_SIZE = 'minor'
+    TOPIC_SIZE = 'major'
     X_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_163.csv'
     Y_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_{TOPIC_SIZE}.csv'
     TEST900_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_900.csv'

@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.multioutput import MultiOutputClassifier
-from sklearn.metrics import f1_score, roc_curve, roc_auc_score
+from sklearn.metrics import f1_score, roc_curve, roc_auc_score, precision_score, recall_score
 
 class Top2VecRandomForest:
     def __init__(self, topic_size, X_path, Y_path, TEST900_PATH, GROUND_TRUTH, OUTPUT_DIR, TITLE900_PATH, test_db_key):
@@ -98,6 +98,21 @@ class Top2VecRandomForest:
         print(f"Micro F1 Score (Optimal Threshold): {f1_micro:.4f}")
         print(f"Macro F1 Score (Optimal Threshold): {f1_macro:.4f}")
         print(f"Weighted F1 Score (Optimal Threshold): {f1_weighted:.4f}")
+
+        precision_micro = precision_score(self.Y_test, self.Y_pred, average="micro", zero_division=0)
+        recall_micro = recall_score(self.Y_test, self.Y_pred, average="micro", zero_division=0)
+        precision_macro = precision_score(self.Y_test, self.Y_pred, average="macro", zero_division=0)
+        recall_macro = recall_score(self.Y_test, self.Y_pred, average="macro", zero_division=0)
+        precision_weighted = precision_score(self.Y_test, self.Y_pred, average="weighted", zero_division=0)
+        recall_weighted = recall_score(self.Y_test, self.Y_pred, average="weighted", zero_division=0)
+        
+        print('-------[Precision/Recall]-------')
+        print(f"Micro Precision: {precision_micro:.4f}")
+        print(f"Micro Recall: {recall_micro:.4f}")
+        print(f"Macro Precision: {precision_macro:.4f}")
+        print(f"Macro Recall: {recall_macro:.4f}")
+        print(f"Weighted Precision: {precision_weighted:.4f}")
+        print(f"Weighted Recall: {recall_weighted:.4f}")
 
         optimal_thresholds_df = pd.DataFrame({
             "class_name": self.Y_train_filtered.columns.tolist(),
@@ -288,7 +303,7 @@ class Top2VecRandomForest:
         self.save_results()
 
 if __name__ == "__main__":
-    TOPIC_SIZE = 'minor'
+    TOPIC_SIZE = 'major'
     X_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_163.csv'
     Y_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_{TOPIC_SIZE}.csv'
     TEST900_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_900.csv'

@@ -3,7 +3,8 @@ import pandas as pd
 import os
 from sklearn.linear_model import LogisticRegression
 from sklearn.multioutput import MultiOutputClassifier
-from sklearn.metrics import f1_score, roc_curve, roc_auc_score
+from sklearn.metrics import f1_score, roc_curve, roc_auc_score, precision_score, recall_score
+
 
 class Top2VecLogisticRegression:
     def __init__(self, topic_size, X_path, Y_path, TEST900_PATH, GROUND_TRUTH, OUTPUT_DIR, TITLE900_PATH, test_db_key):
@@ -90,23 +91,45 @@ class Top2VecLogisticRegression:
             for i, proba in enumerate(self.Y_pred_proba)
         ]).T
 
-    def calculate_performance_metrics(self):
-        f1_micro = f1_score(self.Y_test, self.Y_pred, average="micro")
-        f1_macro = f1_score(self.Y_test, self.Y_pred, average="macro")
-        f1_weighted = f1_score(self.Y_test, self.Y_pred, average="weighted")
+    def calculate_hit_at_k(self, y_true, y_proba, k):
+            hits = 0
+            for true, proba in zip(y_true, y_proba):
+                top_k_indices = np.argsort(proba)[-k:][::-1]
+                if any(true[i] == 1 for i in top_k_indices):
+                    hits += 1
+            return hits / len(y_true)
 
-        print(f"Micro F1 Score (Optimal Threshold): {f1_micro:.4f}")
-        print(f"Macro F1 Score (Optimal Threshold): {f1_macro:.4f}")
-        print(f"Weighted F1 Score (Optimal Threshold): {f1_weighted:.4f}")
+    def calculate_performance_metrics(self):
+        f1_micro = f1_score(self.Y_test, self.Y_pred, average="micro", zero_division=0)
+        f1_macro = f1_score(self.Y_test, self.Y_pred, average="macro", zero_division=0)
+        f1_weighted = f1_score(self.Y_test, self.Y_pred, average="weighted", zero_division=0)
+
+        precision_micro = precision_score(self.Y_test, self.Y_pred, average="micro", zero_division=0)
+        recall_micro = recall_score(self.Y_test, self.Y_pred, average="micro", zero_division=0)
+        precision_macro = precision_score(self.Y_test, self.Y_pred, average="macro", zero_division=0)
+        recall_macro = recall_score(self.Y_test, self.Y_pred, average="macro", zero_division=0)
+        precision_weighted = precision_score(self.Y_test, self.Y_pred, average="weighted", zero_division=0)
+        recall_weighted = recall_score(self.Y_test, self.Y_pred, average="weighted", zero_division=0)
+        print('\n')
+        print('========[Logistic Regression 중분류 성능]=======')
+        print('------------------[F1 score]-------------------')
+        print(f"Micro F1 Score: {f1_micro:.4f}")
+        print(f"Macro F1 Score: {f1_macro:.4f}")
+        print(f"Weighted F1 Score: {f1_weighted:.4f}")
+        print('--------------[Precision/Recall]---------------')
+        print(f"Micro Precision: {precision_micro:.4f}")
+        print(f"Micro Recall: {recall_micro:.4f}")
+        print(f"Macro Precision: {precision_macro:.4f}")
+        print(f"Macro Recall: {recall_macro:.4f}")
+        print(f"Weighted Precision: {precision_weighted:.4f}")
+        print(f"Weighted Recall: {recall_weighted:.4f}")
 
         optimal_thresholds_df = pd.DataFrame({
             "class_name": self.Y_train_filtered.columns.tolist(),
             "optimal_threshold": self.optimal_thresholds
         })
-        optimal_thresholds_df.to_csv(f"{self.OUTPUT_DIR}/optimal_thresholds_lr.csv", index=False)
-        print(f"\nOptimal thresholds saved to '{self.OUTPUT_DIR}/optimal_thresholds_lr.csv'.")
-
-    def calculate_auc(self):
+        
+        # AUC
         auc_scores = []
         for i in range(self.Y_test.shape[1]):
             if np.sum(self.Y_test[:, i]) == 0:
@@ -124,7 +147,23 @@ class Top2VecLogisticRegression:
 
         valid_auc_scores = [score for score in auc_scores if score is not None]
         average_auc = np.mean(valid_auc_scores)
+        print('-------------------[AUC]--------------------')
         print(f"Average AUC: {average_auc:.4f}")
+
+
+        
+
+        hit_1 = self.calculate_hit_at_k(self.Y_test, self.y_proba_matrix, 1)
+        hit_3 = self.calculate_hit_at_k(self.Y_test, self.y_proba_matrix, 3)
+        hit_5 = self.calculate_hit_at_k(self.Y_test, self.y_proba_matrix, 5)
+        print('------------------[hit@k]-------------------')
+        print(f"Hit@1: {hit_1:.4f}")
+        print(f"Hit@3: {hit_3:.4f}")
+        print(f"Hit@5: {hit_5:.4f}")
+
+        optimal_thresholds_df.to_csv(f"{self.OUTPUT_DIR}/optimal_thresholds_lr.csv", index=False)
+        print(f"\nOptimal thresholds saved to '{self.OUTPUT_DIR}/optimal_thresholds_lr.csv'.")
+        
 
     def prepare_predictions(self):
         self.y_proba_matrix = np.hstack([proba[:, -1].reshape(-1, 1) if proba.shape[1] > 1 else proba for proba in self.Y_pred_proba])
@@ -134,23 +173,7 @@ class Top2VecLogisticRegression:
         self.Y_proba_full = np.zeros((self.Y_pred.shape[0], len(self.Y.columns)))
         self.Y_proba_full[:, [self.Y.columns.get_loc(col) for col in self.Y_train_filtered.columns]] = self.y_proba_matrix
 
-    def calculate_hit_at_k(self, y_true, y_proba, k):
-        hits = 0
-        for true, proba in zip(y_true, y_proba):
-            top_k_indices = np.argsort(proba)[-k:][::-1]
-            if any(true[i] == 1 for i in top_k_indices):
-                hits += 1
-        return hits / len(y_true)
-
-    def calculate_hits(self):
-        hit_1 = self.calculate_hit_at_k(self.Y_test, self.y_proba_matrix, 1)
-        hit_3 = self.calculate_hit_at_k(self.Y_test, self.y_proba_matrix, 3)
-        hit_5 = self.calculate_hit_at_k(self.Y_test, self.y_proba_matrix, 5)
-
-        print(f"Hit@1: {hit_1:.4f}")
-        print(f"Hit@3: {hit_3:.4f}")
-        print(f"Hit@5: {hit_5:.4f}")
-
+    
     def predict_label(self, row, column_names):
         return ', '.join(column_names[row == 1])
 
@@ -206,89 +229,106 @@ class Top2VecLogisticRegression:
         return ', '.join([f"{label}-{proba:.3f}" for label, proba in labels_with_proba]) 
 
     def save_results(self):
-        lable_res_df = pd.DataFrame({
+        # ----- 소분류(predicted labels) 결과 파일 생성 -----
+        # 예측 결과 DataFrame (Label 컬럼은 빈 문자열로 채움)
+        pred_minor_df = pd.DataFrame({
             'DB Key': self.test_db_key,
             'Model': 'Top2Vec-LogisticRegression',
-            'Labels': [self.predict_label(row, self.Y.columns) for row in self.Y_pred_full]
+            'Labels': [self.predict_label(row, self.Y.columns) for row in self.Y_pred_full],
+            'Label': [''] * len(self.test_db_key)
         })
-        lable_res_df = pd.concat([lable_res_df, self.ground_truth_df], axis=0).sort_values(by=['DB Key', 'Model'],
-                                                                                             ascending=[True, True]).reset_index(
-            drop=True)
+        # GT DataFrame (파일에서 로드한 순서를 그대로 사용)
+        gt_minor_df = self.ground_truth_df.copy()
+        
+        # 각 DB Key에 대해 예측 결과 행 다음에 GT 행이 나오도록 교차 결합
+        interleaved_minor = []
+        for i in range(len(self.test_db_key)):
+            interleaved_minor.append(pred_minor_df.iloc[i])
+            interleaved_minor.append(gt_minor_df.iloc[i])
+        combined_minor_df = pd.DataFrame(interleaved_minor)
+        
         lable_res_path = f"{self.OUTPUT_DIR}/lr_predicted_labels.csv"
-        lable_res_df.to_csv(lable_res_path, index=False, encoding='utf-8-sig')
-
-        print(f'각 문서의 라벨 예측 결과 저장 경로: {lable_res_path}')
-
-        lable_res_with_prob_df = pd.DataFrame({
+        combined_minor_df.to_csv(lable_res_path, index=False, encoding='utf-8-sig')
+        print(f'각 문서의 소분류 라벨 예측 결과 저장 경로: {lable_res_path}')
+        
+        
+        # ----- 소분류(predicted labels with probability) 결과 파일 생성 -----
+        pred_minor_prob_df = pd.DataFrame({
             'DB Key': self.test_db_key,
             'Model': 'Top2Vec-LogisticRegression',
             'Labels': [self.predict_label_with_proba(row, proba_row, self.Y.columns)
-                       for row, proba_row in zip(self.Y_pred_full, self.Y_proba_full)]
+                    for row, proba_row in zip(self.Y_pred_full, self.Y_proba_full)],
+            'Label': [''] * len(self.test_db_key)
         })
-
-        label_res_with_prob_df = pd.concat([lable_res_with_prob_df, self.ground_truth_df], axis=0).sort_values(
-            by=['DB Key', 'Model'], ascending=[True, True]).reset_index(drop=True)
+        # 동일한 GT DataFrame 사용
+        interleaved_minor_prob = []
+        for i in range(len(self.test_db_key)):
+            interleaved_minor_prob.append(pred_minor_prob_df.iloc[i])
+            interleaved_minor_prob.append(gt_minor_df.iloc[i])
+        combined_minor_prob_df = pd.DataFrame(interleaved_minor_prob)
+        
         lable_res_with_prob_path = f"{self.OUTPUT_DIR}/lr_predicted_labels_with_prob.csv"
-        label_res_with_prob_df.to_csv(lable_res_with_prob_path, index=False, encoding='utf-8-sig')
-
+        combined_minor_prob_df.to_csv(lable_res_with_prob_path, index=False, encoding='utf-8-sig')
         print(f'각 문서의 라벨 및 확률 예측 결과 저장 경로: {lable_res_with_prob_path}')
-
-        test_document_ids = self.X.loc[((self.X['Document ID'] >= 138) & (self.X['Document ID'] <= 158)), 'Document ID'].values
-        total_df = pd.DataFrame({
+        
+        
+        # ----- 소분류(all labels with probability) 결과 파일 생성 -----
+        pred_minor_all_df = pd.DataFrame({
             'DB Key': self.test_db_key,
             'Model': 'Top2Vec-LogisticRegression',
             'Labels': [self.predict_all_labels_with_proba(proba_row, self.Y.columns)
-                       for proba_row in self.Y_proba_full]
+                    for proba_row in self.Y_proba_full],
+            'Label': [''] * len(self.test_db_key)
         })
-        total_df = pd.concat([total_df, self.ground_truth_df], axis=0).sort_values(by=['DB Key', 'Model'],
-                                                                                     ascending=[True, True]).reset_index(
-            drop=True)
+        interleaved_minor_all = []
+        for i in range(len(self.test_db_key)):
+            interleaved_minor_all.append(pred_minor_all_df.iloc[i])
+            interleaved_minor_all.append(gt_minor_df.iloc[i])
+        combined_minor_all_df = pd.DataFrame(interleaved_minor_all)
+        
         all_labels_results_path = f"{self.OUTPUT_DIR}/lr_predicted_all_labels.csv"
-        total_df.to_csv(all_labels_results_path, index=False, encoding='utf-8-sig')
-
+        combined_minor_all_df.to_csv(all_labels_results_path, index=False, encoding='utf-8-sig')
         print(f'각 문서에 대한 모든 라벨의 확률값 결과의 경로: {all_labels_results_path}')
-
+        
+        
+        # ----- 900개 테스트 데이터 결과는 GT와 합치지 않고 예측 결과만 저장 (정렬 없이 원본 순서 유지) -----
         test900_ids = self.test900_df['Document ID'].values
         self.title_dict = self.load_titles(self.TITLE900_PATH)
-
+        
         label_res_with_all_df_900 = pd.DataFrame({
             'DB Key': test900_ids,
             'Title': [self.title_dict.get(str(db_key), 'Unknown') for db_key in test900_ids],
             'Model': 'Top2Vec-LogisticRegression',
             'Labels': [self.predict_all_labels_with_proba(proba_row, self.Y.columns)
-                       for proba_row in self.Y_proba_full_900]
+                    for proba_row in self.Y_proba_full_900]
         })
-
         label_res_with_all_df_900_path = f"{self.OUTPUT_DIR}/test_900_all_labels.csv"
         label_res_with_all_df_900.to_csv(label_res_with_all_df_900_path, index=False, encoding='utf-8-sig')
-
         print(f'900개 테스트 데이터 모든 라벨 확률 예측 결과 저장 경로: {label_res_with_all_df_900_path}')
-
+        
         label_res_with_prob_df_900 = pd.DataFrame({
             'DB Key': test900_ids,
             'Title': [self.title_dict.get(str(db_key), 'Unknown') for db_key in test900_ids],
             'Model': 'Top2Vec-LogisticRegression',
             'Labels': [self.predict_label_with_proba(self.Y_pred_full_900[i], self.Y_proba_full_900[i], self.Y.columns)
-                       for i in range(len(test900_ids))]
+                    for i in range(len(test900_ids))]
         })
         label_res_with_prob_df_900_path = f"{self.OUTPUT_DIR}/test_900_predictions_with_prob.csv"
         label_res_with_prob_df_900.to_csv(label_res_with_prob_df_900_path, index=False, encoding='utf-8-sig')
-
         print(f'900개 테스트 데이터 예측 결과 저장 경로: {label_res_with_prob_df_900_path}')
+
 
     def run(self):
         self.load_data()
         self.train_model()
         self.calculate_optimal_thresholds()
+        self.prepare_predictions()  
         self.calculate_performance_metrics()
-        self.calculate_auc()
-        self.prepare_predictions()
-        self.calculate_hits()
         self.load_test900_data()
         self.save_results()
 
 if __name__ == "__main__":
-    TOPIC_SIZE = 'minor'
+    TOPIC_SIZE = 'major'
     X_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_163.csv'
     Y_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_{TOPIC_SIZE}.csv'
     TEST900_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_900.csv'
