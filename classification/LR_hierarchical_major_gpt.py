@@ -258,6 +258,7 @@ pred_minor_df = pd.DataFrame({
     'Label': [''] * len(TEST_DB_KEY[730:])
 })
 gt_minor_df = pd.read_csv(MINOR_GROUND_TRUTH, encoding='utf-8-sig')
+gt_minor_df = gt_minor_df[730:]
 
 interleaved_minor = []
 for i in range(len(TEST_DB_KEY[730:])):
@@ -286,7 +287,6 @@ pred_minor_prob_df = pd.DataFrame({
                for row, proba_row in zip(Y_minor_pred_full, Y_proba_full)],
     'Label': [''] * len(TEST_DB_KEY[730:])
 })
-gt_minor_df = pd.read_csv(MINOR_GROUND_TRUTH, encoding='utf-8-sig')
 
 interleaved_minor_prob = []
 for i in range(len(TEST_DB_KEY[730:])):
@@ -315,7 +315,6 @@ pred_minor_all_df = pd.DataFrame({
                for proba_row in Y_proba_full],
     'Label': [''] * len(TEST_DB_KEY[730:])
 })
-gt_minor_df = pd.read_csv(MINOR_GROUND_TRUTH, encoding='utf-8-sig')
 
 interleaved_minor_all = []
 for i in range(len(TEST_DB_KEY[730:])):
@@ -340,7 +339,7 @@ pred_major_df = pd.DataFrame({
 })
 
 gt_major_df = pd.read_csv(MAJOR_GROUND_TRUTH, encoding='utf-8-sig')
-
+gt_major_df = gt_major_df[730:]
 
 print()
 interleaved_rows = []
