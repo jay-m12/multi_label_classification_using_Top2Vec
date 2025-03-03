@@ -8,8 +8,6 @@ from sklearn.metrics import f1_score, roc_curve, roc_auc_score, precision_score,
 # === 설정 ==================================================================
 
 DOCUMENT_EMBEDDINGS_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_163.csv'
-TEST900_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_900.csv'
-TITLE900_PATH = '/home/women/doyoung/Top2Vec/preprocessing/input/title_900.txt'
 
 MAJOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/major_GT.csv'
 MINOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/minor_GT.csv'

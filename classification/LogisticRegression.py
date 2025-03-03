@@ -7,15 +7,13 @@ from sklearn.metrics import f1_score, roc_curve, roc_auc_score, precision_score,
 
 
 class Top2VecLogisticRegression:
-    def __init__(self, topic_size, X_path, Y_path, TEST900_PATH, GROUND_TRUTH, OUTPUT_DIR, TITLE900_PATH, test_db_key):
+    def __init__(self, topic_size, X_path, Y_path, TITLE_PATH,  GROUND_TRUTH, OUTPUT_DIR):
         self.topic_size = topic_size
         self.X_path = X_path
         self.Y_path = Y_path
-        self.TEST900_PATH = TEST900_PATH
+        self.TITLE_PATH = TITLE_PATH
         self.GROUND_TRUTH = GROUND_TRUTH
         self.OUTPUT_DIR = OUTPUT_DIR
-        self.TITLE900_PATH = TITLE900_PATH
-        self.test_db_key = test_db_key
 
         os.makedirs(self.OUTPUT_DIR, exist_ok=True)
         self.data = [None] * 16 
@@ -29,15 +27,18 @@ class Top2VecLogisticRegression:
         self.Y = pd.read_csv(f'{self.Y_path}', header=0)
         self.ground_truth_df = pd.read_csv(self.GROUND_TRUTH, encoding='utf-8-sig')
 
+        self.title_df = pd.read_csv(TITLE_PATH, header=0)
+        self.test_db_key = self.X['Document ID'].values
+        self.title = self.title_df['연구보고서'].values
+
         self.X['Embedding Vector'] = self.X['Embedding Vector'].astype(str).apply(
             lambda x: np.array(list(map(float, x.strip('[]').split(','))))
         )
 
-        test_mask = (self.X['Document ID'] >= 138) & (self.X['Document ID'] <= 158)
-        self.X_test = self.X[test_mask].copy()
-        self.Y_test_df = self.Y.loc[test_mask].copy()
-        self.X_train = self.X[~test_mask].copy()
-        self.Y_train_df = self.Y.loc[~test_mask].copy()
+        self.X_train = self.X.iloc[:730].copy()
+        self.Y_train_df = self.Y.iloc[:730].copy()
+        self.X_test = self.X.iloc[730:].copy() 
+        self.Y_test_df = self.Y.iloc[730:].copy()
 
         # 단일 클래스 컬럼 식별 및 제거
         single_class_cols = [col for col in self.Y.columns if self.Y_train_df[col].nunique() == 1]
@@ -51,7 +52,6 @@ class Top2VecLogisticRegression:
 
         self.X_train = self.X_train.drop(columns=['Document ID'])
         self.X_test = self.X_test.drop(columns=['Document ID'])
-
         self.X_train = np.stack(self.X_train['Embedding Vector'].values)
         self.X_test = np.stack(self.X_test['Embedding Vector'].values)
 
@@ -150,9 +150,6 @@ class Top2VecLogisticRegression:
         print('-------------------[AUC]--------------------')
         print(f"Average AUC: {average_auc:.4f}")
 
-
-        
-
         hit_1 = self.calculate_hit_at_k(self.Y_test, self.y_proba_matrix, 1)
         hit_3 = self.calculate_hit_at_k(self.Y_test, self.y_proba_matrix, 3)
         hit_5 = self.calculate_hit_at_k(self.Y_test, self.y_proba_matrix, 5)
@@ -185,43 +182,6 @@ class Top2VecLogisticRegression:
         labels_with_proba.sort(key=lambda x: x[1], reverse=True)
         return ', '.join([f"{label}-{proba:.3f}" for label, proba in labels_with_proba])
 
-    def load_test900_data(self):
-        self.test900_df = pd.read_csv(self.TEST900_PATH, header=0)
-
-        self.test900_df['Embedding Vector'] = self.test900_df['Embedding Vector'].astype(str).apply(
-            lambda x: np.array(list(map(float, x.strip('[]').split(','))))
-        )
-        test900_ids = self.test900_df['Document ID'].values
-        self.X_test_900 = np.stack(self.test900_df.drop(columns=['Document ID'])['Embedding Vector'].values)
-
-        self.Y_pred_proba_900 = self.model.predict_proba(self.X_test_900)
-
-        self.Y_pred_900 = np.array([
-            ((proba[:, 1] >= self.optimal_thresholds[i]) if proba.shape[1] > 1
-             else (proba[:, 0] >= self.optimal_thresholds[i])).astype(int)
-            for i, proba in enumerate(self.Y_pred_proba_900)
-        ]).T
-
-        self.y_proba_matrix_900 = np.hstack([proba[:, -1].reshape(-1, 1) if proba.shape[1] > 1 else proba for proba in self.Y_pred_proba_900])
-
-        self.Y_pred_full_900 = np.zeros((self.Y_pred_900.shape[0], len(self.Y.columns)))
-        self.Y_pred_full_900[:, [self.Y.columns.get_loc(col) for col in self.Y_train_filtered.columns]] = self.Y_pred_900
-
-        self.Y_proba_full_900 = np.zeros((len(test900_ids), len(self.Y.columns)))  # 문서 개수와 라벨 개수에 맞춰 초기화
-        self.Y_proba_full_900[:, [self.Y.columns.get_loc(col) for col in self.Y_train_filtered.columns]] = self.y_proba_matrix_900
-
-    def load_titles(self, title_file):
-        title_dict = {}
-        with open(title_file, "r", encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if '-' in line:  # '-'이 포함된 줄만 처리
-                    try:
-                        db_key, title = line.split('-', 1)
-                        title_dict[db_key] = title
-                    except ValueError:
-                        print(f"Skipping line due to unexpected format: {line}")
-        return title_dict
 
     def predict_all_labels_with_proba(self, proba_row, column_names):
         labels_with_proba = list(zip(column_names, proba_row)) 
@@ -232,17 +192,20 @@ class Top2VecLogisticRegression:
         # ----- 소분류(predicted labels) 결과 파일 생성 -----
         # 예측 결과 DataFrame (Label 컬럼은 빈 문자열로 채움)
         pred_minor_df = pd.DataFrame({
-            'DB Key': self.test_db_key,
+            'DB Key': self.test_db_key[730:],
+            'Title': self.title[730:],
             'Model': 'Top2Vec-LogisticRegression',
             'Labels': [self.predict_label(row, self.Y.columns) for row in self.Y_pred_full],
-            'Label': [''] * len(self.test_db_key)
         })
         # GT DataFrame (파일에서 로드한 순서를 그대로 사용)
         gt_minor_df = self.ground_truth_df.copy()
-        
+        gt_minor_df = gt_minor_df[730:]
+        gt_minor_df.rename(columns={'Label': 'Labels'}, inplace=True)
+        gt_minor_df.insert(1, 'Title', self.title[730:])
+
         # 각 DB Key에 대해 예측 결과 행 다음에 GT 행이 나오도록 교차 결합
         interleaved_minor = []
-        for i in range(len(self.test_db_key)):
+        for i in range(len(self.title[730:])):
             interleaved_minor.append(pred_minor_df.iloc[i])
             interleaved_minor.append(gt_minor_df.iloc[i])
         combined_minor_df = pd.DataFrame(interleaved_minor)
@@ -254,15 +217,15 @@ class Top2VecLogisticRegression:
         
         # ----- 소분류(predicted labels with probability) 결과 파일 생성 -----
         pred_minor_prob_df = pd.DataFrame({
-            'DB Key': self.test_db_key,
+            'DB Key': self.test_db_key[730:],
+            'Title': self.title[730:],
             'Model': 'Top2Vec-LogisticRegression',
             'Labels': [self.predict_label_with_proba(row, proba_row, self.Y.columns)
                     for row, proba_row in zip(self.Y_pred_full, self.Y_proba_full)],
-            'Label': [''] * len(self.test_db_key)
         })
         # 동일한 GT DataFrame 사용
         interleaved_minor_prob = []
-        for i in range(len(self.test_db_key)):
+        for i in range(len(self.title[730:])):
             interleaved_minor_prob.append(pred_minor_prob_df.iloc[i])
             interleaved_minor_prob.append(gt_minor_df.iloc[i])
         combined_minor_prob_df = pd.DataFrame(interleaved_minor_prob)
@@ -274,14 +237,14 @@ class Top2VecLogisticRegression:
         
         # ----- 소분류(all labels with probability) 결과 파일 생성 -----
         pred_minor_all_df = pd.DataFrame({
-            'DB Key': self.test_db_key,
+            'DB Key': self.test_db_key[730:],
+            'Title': self.title[730:],
             'Model': 'Top2Vec-LogisticRegression',
             'Labels': [self.predict_all_labels_with_proba(proba_row, self.Y.columns)
                     for proba_row in self.Y_proba_full],
-            'Label': [''] * len(self.test_db_key)
         })
         interleaved_minor_all = []
-        for i in range(len(self.test_db_key)):
+        for i in range(len(self.title[730:])):
             interleaved_minor_all.append(pred_minor_all_df.iloc[i])
             interleaved_minor_all.append(gt_minor_df.iloc[i])
         combined_minor_all_df = pd.DataFrame(interleaved_minor_all)
@@ -291,31 +254,6 @@ class Top2VecLogisticRegression:
         print(f'각 문서에 대한 모든 라벨의 확률값 결과의 경로: {all_labels_results_path}')
         
         
-        # ----- 900개 테스트 데이터 결과는 GT와 합치지 않고 예측 결과만 저장 (정렬 없이 원본 순서 유지) -----
-        test900_ids = self.test900_df['Document ID'].values
-        self.title_dict = self.load_titles(self.TITLE900_PATH)
-        
-        label_res_with_all_df_900 = pd.DataFrame({
-            'DB Key': test900_ids,
-            'Title': [self.title_dict.get(str(db_key), 'Unknown') for db_key in test900_ids],
-            'Model': 'Top2Vec-LogisticRegression',
-            'Labels': [self.predict_all_labels_with_proba(proba_row, self.Y.columns)
-                    for proba_row in self.Y_proba_full_900]
-        })
-        label_res_with_all_df_900_path = f"{self.OUTPUT_DIR}/test_900_all_labels.csv"
-        label_res_with_all_df_900.to_csv(label_res_with_all_df_900_path, index=False, encoding='utf-8-sig')
-        print(f'900개 테스트 데이터 모든 라벨 확률 예측 결과 저장 경로: {label_res_with_all_df_900_path}')
-        
-        label_res_with_prob_df_900 = pd.DataFrame({
-            'DB Key': test900_ids,
-            'Title': [self.title_dict.get(str(db_key), 'Unknown') for db_key in test900_ids],
-            'Model': 'Top2Vec-LogisticRegression',
-            'Labels': [self.predict_label_with_proba(self.Y_pred_full_900[i], self.Y_proba_full_900[i], self.Y.columns)
-                    for i in range(len(test900_ids))]
-        })
-        label_res_with_prob_df_900_path = f"{self.OUTPUT_DIR}/test_900_predictions_with_prob.csv"
-        label_res_with_prob_df_900.to_csv(label_res_with_prob_df_900_path, index=False, encoding='utf-8-sig')
-        print(f'900개 테스트 데이터 예측 결과 저장 경로: {label_res_with_prob_df_900_path}')
 
 
     def run(self):
@@ -324,21 +262,20 @@ class Top2VecLogisticRegression:
         self.calculate_optimal_thresholds()
         self.prepare_predictions()  
         self.calculate_performance_metrics()
-        self.load_test900_data()
         self.save_results()
 
 if __name__ == "__main__":
-    TOPIC_SIZE = 'major'
-    X_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_163.csv'
-    Y_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_{TOPIC_SIZE}.csv'
-    TEST900_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_900.csv'
-    GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/{TOPIC_SIZE}_GT.csv'
+    TOPIC_SIZE = 'minor'
+    X_PATH = '/home/women/doyoung/Top2Vec/embedding/output/gpt_document_embeddings_900.csv'
+    Y_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_gpt_{TOPIC_SIZE}.csv'
+    TITLE_PATH = '/home/women/doyoung/Top2Vec/preprocessing/input/gpt_gt.csv'
+    GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/gpt_{TOPIC_SIZE}_GT.csv'
     OUTPUT_DIR = f'/home/women/doyoung/Top2Vec/classification/output/LogisticRegression/{TOPIC_SIZE}'
-    TITLE900_PATH = '/home/women/doyoung/Top2Vec/preprocessing/input/title_900.txt'
-    test_db_key = [453073, 453074, 453075, 453076, 453077, 453078, 453079, 453082, 453083, 453084, 453093,
-                    453095, 453096, 453097, 452970, 453102, 453104, 453105, 453110, 453114, 453116]
-
+    
     evaluator = Top2VecLogisticRegression(
-        TOPIC_SIZE, X_PATH, Y_PATH, TEST900_PATH, GROUND_TRUTH, OUTPUT_DIR, TITLE900_PATH, test_db_key
+        TOPIC_SIZE, X_PATH, Y_PATH, TITLE_PATH, GROUND_TRUTH, OUTPUT_DIR
     )
     evaluator.run()
+
+
+

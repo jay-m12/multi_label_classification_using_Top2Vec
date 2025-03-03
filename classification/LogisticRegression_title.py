@@ -114,7 +114,7 @@ class Top2VecLogisticRegression:
                         # print(f"[Doc {i+730}] '{title}' ▶ 중분류 '{minor_keyword}' 확률 업데이트: {prev_prob:.4f} → 1.0000")
 
             for major_keyword in major_keywords:
-                if major_keyword in title:  # **단순 포함 여부 확인**
+                if major_keyword in title:  
                     for minor_keyword in major_minor_mapping[major_keyword]:
                         if minor_keyword in self.Y_train_filtered.columns:
                             col_index = self.Y_train_filtered.columns.get_loc(minor_keyword)

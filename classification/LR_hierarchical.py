@@ -6,22 +6,15 @@ from sklearn.multioutput import MultiOutputClassifier
 from sklearn.metrics import f1_score, roc_curve, roc_auc_score
 
 # === 설정 ==================================================================
+DOCUMENT_EMBEDDINGS_PATH = '/home/women/doyoung/Top2Vec/embedding/output/gpt_document_embeddings_900.csv'
 
+MAJOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/gpt_major_GT.csv'
+MINOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/gpt_minor_GT.csv'
 
-DOCUMENT_EMBEDDINGS_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_163.csv'
-TEST900_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_900.csv'
-TITLE900_PATH = '/home/women/doyoung/Top2Vec/preprocessing/input/title_900.txt'
+OUTPUT_DIR = f'/home/women/doyoung/Top2Vec/classification/output/LogisticRegression/hierarchical_gpt'
 
-MAJOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/major_GT.csv'
-MINOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/minor_GT.csv'
-
-OUTPUT_DIR = f'/home/women/doyoung/Top2Vec/classification/output/LogisticRegression/hierarchical'
-
-Y_MAJOR_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_major.csv'
-Y_MINOR_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_minor.csv'
-
-TEST_DB_KEY = [453073, 453074, 453075, 453076, 453077, 453078, 453079, 453082, 453083, 453084, 453093,
-                453095, 453096, 453097, 452970, 453102, 453104, 453105, 453110, 453114, 453116]
+Y_MAJOR_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_gpt_major.csv'
+Y_MINOR_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_gpt_minor.csv'
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -30,19 +23,20 @@ X = pd.read_csv(DOCUMENT_EMBEDDINGS_PATH, header=0)
 Y_major = pd.read_csv(Y_MAJOR_PATH, header=0)
 Y_minor = pd.read_csv(Y_MINOR_PATH, header=0)
 
+TEST_DB_KEY = X['Document ID'].values
+
 X['Embedding Vector'] = X['Embedding Vector'].astype(str).apply(
     lambda x: np.array(list(map(float, x.strip('[]').split(','))))
 )
 
-# 테스트 데이터(138~158) 분리
-test_mask = (X['Document ID'] >= 138) & (X['Document ID'] <= 158)
-X_test = X[test_mask].copy()
-X_train = X[~test_mask].copy()
+# 테스트 데이터 분리
+X_train = X.iloc[:730].copy()  
+X_test = X.iloc[730:].copy() 
 
-Y_major_test = Y_major.loc[test_mask].copy()
-Y_major_train = Y_major.loc[~test_mask].copy()
-Y_minor_test = Y_minor.loc[test_mask].copy()
-Y_minor_train = Y_minor.loc[~test_mask].copy()
+Y_major_train = Y_major.iloc[:730].copy()
+Y_major_test = Y_major.iloc[730:].copy()
+Y_minor_train = Y_minor.iloc[:730].copy()
+Y_minor_test = Y_minor.iloc[730:].copy()
 
 # 단일 클래스 컬럼 제거 (대분류)
 major_single_class_cols = [col for col in Y_major.columns if Y_major_train[col].nunique() == 1]
@@ -59,6 +53,7 @@ Y_minor_test_filtered = Y_minor_test.drop(columns=minor_single_class_cols)
 
 print(f"[중분류] 제거된 컬럼 수: {len(minor_single_class_cols)}/{Y_minor.shape[1]}")
 print("[중분류] 제거된 컬럼 목록:", minor_single_class_cols)
+
 
 X_train = X_train.drop(columns=['Document ID'])
 X_test = X_test.drop(columns=['Document ID'])
@@ -162,7 +157,7 @@ print(f"Micro F1 Score (Optimal Threshold): {f1_micro:.4f}")
 print(f"Macro F1 Score (Optimal Threshold): {f1_macro:.4f}")
 print(f"Weighted F1 Score (Optimal Threshold): {f1_weighted:.4f}")
 
-minor_optimal_thresholds_df = pd.DataFrame({
+minor_optimal_thresholds_df = pd.DataFrame({ 
     "class_name": Y_minor_train_filtered.columns.tolist(),
     "optimal_threshold": minor_optimal_thresholds
 })
@@ -217,7 +212,7 @@ def predict_label(row, column_names):
 minor_ground_truth_df = pd.read_csv(MINOR_GROUND_TRUTH, encoding='utf-8-sig')
 
 lable_res_df = pd.DataFrame({
-    'DB Key': TEST_DB_KEY,
+    'DB Key': TEST_DB_KEY[730:],
     'Model': 'Top2Vec-LogisticRegression',
     'Labels': [predict_label(row, Y_minor.columns) for row in Y_minor_pred_full]
 })
@@ -237,7 +232,7 @@ def predict_label_with_proba(row, proba_row, column_names):
     return ', '.join([f"{label}-{proba:.3f}" for label, proba in labels_with_proba])
 
 lable_res_with_prob_df = pd.DataFrame({
-    'DB Key': TEST_DB_KEY,
+    'DB Key': TEST_DB_KEY[730:],
     'Model': 'Top2Vec-LogisticRegression',
     'Labels': [predict_label_with_proba(row, proba_row, Y_minor.columns)
                for row, proba_row in zip(Y_minor_pred_full, Y_proba_full)]
@@ -258,7 +253,7 @@ def predict_all_labels_with_proba(proba_row, column_names):
     return ', '.join([f"{label}-{proba:.3f}" for label, proba in labels_with_proba])
 
 total_df = pd.DataFrame({
-    'DB Key': TEST_DB_KEY,
+    'DB Key': TEST_DB_KEY[730:],
     'Model': 'Top2Vec-LogisticRegression',
     'Labels': [predict_all_labels_with_proba(proba_row, Y_minor.columns)
                for proba_row in Y_proba_full]

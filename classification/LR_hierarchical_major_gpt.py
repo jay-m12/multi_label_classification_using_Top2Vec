@@ -1,3 +1,5 @@
+# 출력 데이터 형식 맞추기: 타이틀, 키 번호
+
 import numpy as np
 import pandas as pd
 import os
@@ -8,7 +10,7 @@ from sklearn.metrics import f1_score, roc_curve, roc_auc_score, precision_score,
 # === 설정 ==================================================================
 
 DOCUMENT_EMBEDDINGS_PATH = '/home/women/doyoung/Top2Vec/embedding/output/gpt_document_embeddings_900.csv'
-
+TITLE_PATH = '/home/women/doyoung/Top2Vec/preprocessing/input/gpt_gt.csv'
 MAJOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/gpt_major_GT.csv'
 MINOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/gpt_minor_GT.csv'
 
@@ -24,8 +26,10 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 X = pd.read_csv(DOCUMENT_EMBEDDINGS_PATH, header=0)
 Y_major = pd.read_csv(Y_MAJOR_PATH, header=0)
 Y_minor = pd.read_csv(Y_MINOR_PATH, header=0)
+title_df = pd.read_csv(TITLE_PATH, header=0)
 
-TEST_DB_KEY = X['Document ID'].values
+test_db_key = X['Document ID'].values
+title = title_df['연구보고서'].values
 
 
 X['Embedding Vector'] = X['Embedding Vector'].astype(str).apply(
@@ -56,6 +60,7 @@ Y_minor_test_filtered = Y_minor_test.drop(columns=minor_single_class_cols)
 
 print(f"[중분류] 제거된 컬럼 수: {len(minor_single_class_cols)}/{Y_minor.shape[1]}")
 print("[중분류] 제거된 컬럼 목록:", minor_single_class_cols)
+print(f"First few rows of X_test: \n{X_test.dtypes}")
 
 X_train = X_train.drop(columns=['Document ID'])
 X_test = X_test.drop(columns=['Document ID'])
@@ -129,7 +134,7 @@ for doc_idx in range(X_test.shape[0]):
         if Y_major_pred[doc_idx, class_idx] == 0:
             minor_class_indices = get_minor_classes(class_idx)
             for minor_class_idx in minor_class_indices:
-                Y_minor_pred_proba[minor_class_idx][doc_idx, 1] = -1000000000   # 음의 무한대로 설정할 경우 오류 발생
+                Y_minor_pred_proba[minor_class_idx][doc_idx, 1] *= -1000000000   # 음의 무한대로 설정할 경우 오류 발생
 
 
 minor_optimal_thresholds = []
@@ -252,16 +257,18 @@ def predict_label(row, column_names):
 
 
 pred_minor_df = pd.DataFrame({
-    'DB Key': TEST_DB_KEY[730:],
+    'DB Key': test_db_key[730:],
+    'Title': title_df[730:],
     'Model': 'Top2Vec-LogisticRegression',
     'Labels': [predict_label(row, Y_minor.columns) for row in Y_minor_pred_full],
-    'Label': [''] * len(TEST_DB_KEY[730:])
+    'Label': [''] * len(test_db_key[730:])
 })
 gt_minor_df = pd.read_csv(MINOR_GROUND_TRUTH, encoding='utf-8-sig')
 gt_minor_df = gt_minor_df[730:]
+gt_minor_df.rename(columns={'Label': 'Labels'}, inplace=True)
 
 interleaved_minor = []
-for i in range(len(TEST_DB_KEY[730:])):
+for i in range(len(test_db_key[730:])):
     interleaved_minor.append(pred_minor_df.iloc[i])
     interleaved_minor.append(gt_minor_df.iloc[i])
 combined_minor_df = pd.DataFrame(interleaved_minor)
@@ -281,15 +288,15 @@ def predict_label_with_proba(row, proba_row, column_names):
     return ', '.join([f"{label}-{proba:.3f}" for label, proba in labels_with_proba])
 
 pred_minor_prob_df = pd.DataFrame({
-    'DB Key': TEST_DB_KEY[730:],
+    'DB Key': test_db_key[730:],
     'Model': 'Top2Vec-LogisticRegression',
     'Labels': [predict_label_with_proba(row, proba_row, Y_minor.columns)
                for row, proba_row in zip(Y_minor_pred_full, Y_proba_full)],
-    'Label': [''] * len(TEST_DB_KEY[730:])
+    'Label': [''] * len(test_db_key[730:])
 })
 
 interleaved_minor_prob = []
-for i in range(len(TEST_DB_KEY[730:])):
+for i in range(len(test_db_key[730:])):
     interleaved_minor_prob.append(pred_minor_prob_df.iloc[i])
     interleaved_minor_prob.append(gt_minor_df.iloc[i])
 combined_minor_prob_df = pd.DataFrame(interleaved_minor_prob)
@@ -309,15 +316,14 @@ def predict_all_labels_with_proba(proba_row, column_names):
     return ', '.join([f"{label}-{proba:.3f}" for label, proba in labels_with_proba])
 
 pred_minor_all_df = pd.DataFrame({
-    'DB Key': TEST_DB_KEY[730:],
+    'DB Key': test_db_key[730:],
     'Model': 'Top2Vec-LogisticRegression',
     'Labels': [predict_all_labels_with_proba(proba_row, Y_minor.columns)
                for proba_row in Y_proba_full],
-    'Label': [''] * len(TEST_DB_KEY[730:])
 })
 
 interleaved_minor_all = []
-for i in range(len(TEST_DB_KEY[730:])):
+for i in range(len(test_db_key[730:])):
     interleaved_minor_all.append(pred_minor_all_df.iloc[i])
     interleaved_minor_all.append(gt_minor_df.iloc[i])
 combined_minor_all_df = pd.DataFrame(interleaved_minor_all)
@@ -332,18 +338,17 @@ Y_major_pred_full = np.zeros((Y_major_pred.shape[0], len(Y_major.columns)))
 Y_major_pred_full[:, [Y_major.columns.get_loc(col) for col in Y_major_train_filtered.columns]] = Y_major_pred
 
 pred_major_df = pd.DataFrame({
-    'DB Key': TEST_DB_KEY[730:],
+    'DB Key': test_db_key[730:],
     'Model': 'Top2Vec-LogisticRegression',
     'Labels': [predict_label(row, Y_major.columns) for row in Y_major_pred_full],
-    'Label': [''] * len(TEST_DB_KEY[730:])
 })
 
 gt_major_df = pd.read_csv(MAJOR_GROUND_TRUTH, encoding='utf-8-sig')
 gt_major_df = gt_major_df[730:]
+gt_major_df.rename(columns={'Label': 'Labels'}, inplace=True)
 
-print()
 interleaved_rows = []
-n = len(TEST_DB_KEY[730:])
+n = len(test_db_key[730:])
 for i in range(n):
     interleaved_rows.append(pred_major_df.iloc[i])
     interleaved_rows.append(gt_major_df.iloc[i])
