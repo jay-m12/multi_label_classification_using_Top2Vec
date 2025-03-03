@@ -254,8 +254,6 @@ class Top2VecLogisticRegression:
         print(f'각 문서에 대한 모든 라벨의 확률값 결과의 경로: {all_labels_results_path}')
         
         
-
-
     def run(self):
         self.load_data()
         self.train_model()
