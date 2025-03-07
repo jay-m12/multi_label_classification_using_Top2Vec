@@ -3,20 +3,22 @@ import numpy as np
 import pandas as pd
 from top2vec import Top2Vec
 from gensim.models import Doc2Vec
+from joblib import dump, load
 
 class Top2VecTrainer:  
-    def __init__(self, top2vec_output_path, doc2vec_output_path, input_path):
-        self.TOP2VEC_OUTPUT_PATH = top2vec_output_path
-        self.DOC2VEC_OUTPUT_PATH = doc2vec_output_path
+    def __init__(self, top2vec_output_path, input_path, doc_count):
+        self.DOC_COUNT = doc_count
+        self.TOP2VEC_OUTPUT_PATH = f'{top2vec_output_path}_{self.DOC_COUNT}'
         self.INPUT_PATH = input_path
+
         
         os.makedirs(os.path.dirname(self.TOP2VEC_OUTPUT_PATH), exist_ok=True)
-        os.makedirs(os.path.dirname(self.DOC2VEC_OUTPUT_PATH), exist_ok=True)
         self.preprocessed_text = []
     
     def load_data(self):
         with open(self.INPUT_PATH, "r", encoding="utf-8") as f:
             self.preprocessed_text = [line.strip() for line in f if line.strip()]
+            self.preprocessed_text = self.preprocessed_text[0:self.DOC_COUNT]
         print("입력 문서 개수:", len(self.preprocessed_text))
     
     def train_model(self):
@@ -42,11 +44,6 @@ class Top2VecTrainer:
         # Top2Vec 모델 저장
         self.top2vec_model.save(self.TOP2VEC_OUTPUT_PATH)
         print(f"Top2Vec 모델 저장 완료: {self.TOP2VEC_OUTPUT_PATH}")
-
-        # Doc2Vec 모델 저장 (Top2Vec 내부 Doc2Vec 모델 추출)
-        doc2vec_model = self.top2vec_model.model
-        doc2vec_model.save(self.DOC2VEC_OUTPUT_PATH)
-        print(f"Doc2Vec 모델 저장 완료: {self.DOC2VEC_OUTPUT_PATH}")
     
     def process(self):
         self.load_data()
@@ -68,6 +65,20 @@ class Top2VecProcessor:  # 모델이 학습한 문서 및 단어에 대한 임�
         self.word_vectors_updated = None
         self.vocab_updated = None
     
+    def load_data_ori(self):
+        with open(self.INPUT_DIR, 'r', encoding='utf-8') as f:
+            self.preprocessed_text = [line.strip() for line in f if line.strip()]
+        print("입력 문서 개수:", len(self.preprocessed_text))
+
+        with open(self.TITLE_PATH, 'r', encoding='utf-8') as f:
+            self.title_ids = [line.split('-')[0].strip() for line in f if line.strip()]
+        print("추출된 Title ID 개수:", len(self.title_ids))
+
+        print(f"Title IDs 개수: {len(self.title_ids)}")  # 문서 개수
+        print(f"Document Vectors 개수: {self.document_vectors.shape[0]}")  # 벡터 개수 확인
+
+
+
     def load_data(self):
         with open(self.INPUT_DIR, 'r', encoding='utf-8') as f:
             self.preprocessed_text = [line.strip() for line in f if line.strip()]
@@ -76,11 +87,22 @@ class Top2VecProcessor:  # 모델이 학습한 문서 및 단어에 대한 임�
         with open(self.TITLE_PATH, 'r', encoding='utf-8') as f:
             self.title_ids = [line.split('-')[0].strip() for line in f if line.strip()]
         print("추출된 Title ID 개수:", len(self.title_ids))
+
+        print(f"Title IDs 개수: {len(self.title_ids)}")
+        
+        if self.document_vectors is not None:
+            print(f"학습된 모델 속 Document Vectors 개수: {self.document_vectors.shape[0]}")
+        else:
+            print("Warning: Document Vectors가 로드되지 않았습니다.")
+
+
     
     def load_model(self):
         self.top2vec_model = Top2Vec.load(self.MODEL_PATH)
         self.document_vectors = self.top2vec_model.document_vectors
         print("모델 로드 완료")
+
+
     
     def add_custom_word_embeddings(self):
         word_vectors = self.top2vec_model.word_vectors
@@ -108,29 +130,15 @@ class Top2VecProcessor:  # 모델이 학습한 문서 및 단어에 대한 임�
 
         document_df_900 = pd.DataFrame({
             'Document ID': self.title_ids,
-            'Embedding Vector': [list(vec) for vec in self.document_vectors[163:]]  
+            'Embedding Vector': [list(vec) for vec in self.document_vectors[:]]  
         })
         document_df_900.to_csv(f"{self.OUTPUT_DIR}/document_embeddings_900.csv", index=False)
         
-        document_df_163 = pd.DataFrame({
-            'Document ID': list(range(163)),
-            'Embedding Vector': [list(vec) for vec in self.document_vectors[:163]]
-        })
-        document_df_163.to_csv(f"{self.OUTPUT_DIR}/document_embeddings_163.csv", index=False)
-        
-        document_df_all = pd.DataFrame({
-            'Document ID': list(range(len(self.document_vectors))),
-            'Embedding Vector': [list(vec) for vec in self.document_vectors]
-        })
-        document_df_all.to_csv(f"{self.OUTPUT_DIR}/document_embeddings_all.csv", index=False)
         
         word_df = pd.DataFrame(self.word_vectors_updated, index=self.vocab_updated)
         word_df.to_csv(f"{self.OUTPUT_DIR}/word_embeddings.csv", index_label="Word")
         
-        topic_df = pd.DataFrame(self.top2vec_model.topic_vectors)
-        topic_df.to_csv(f"{self.OUTPUT_DIR}/topic_embeddings.csv", index_label="Topic ID")
-        
-        print("CSV 파일 저장 완료: document_embeddings_900.csv, document_embeddings_163.csv, document_embeddings_all.csv, word_embeddings.csv, topic_embeddings.csv")
+        print("CSV 파일 저장 완료: document_embeddings_900.csv, word_embeddings.csv")
     
     def save_document_topics(self):
         doc_ids = list(range(len(self.document_vectors)))
@@ -146,22 +154,24 @@ class Top2VecProcessor:  # 모델이 학습한 문서 및 단어에 대한 임�
         print(f"Document-topic assignment saved to: {output_file}")
     
     def process(self):
-        self.load_data()
         self.load_model()
+        self.load_data()
+        
         self.add_custom_word_embeddings()
         self.save_embeddings()
         self.save_document_topics()
 
-class Doc2VecInference:
-    def __init__(self, model_path, output_dir):
-        self.model_path = model_path
+class Top2VecInference:
+    def __init__(self, top2vec_model_path, output_dir):
+        self.top2vec_model_path = top2vec_model_path
         self.output_dir = output_dir
         self.doc2vec_model = None
 
         os.makedirs(self.output_dir, exist_ok=True)
 
     def load_model(self):
-        self.doc2vec_model = Doc2Vec.load(self.model_path)
+        top2vec_model = load(self.top2vec_model_path)
+        self.doc2vec_model = top2vec_model.model
         print("추론을 위한 Doc2Vec 모델 로드 완료")
 
     def infer_document_vectors(self, documents):
@@ -200,34 +210,34 @@ class Doc2VecInference:
 
 
 if __name__ == "__main__":
-    # # 모델 학습시킨 후, 학습된 모델 저장
-    # trainer = Top2VecTrainer(
-    # top2vec_output_path='/home/women/doyoung/Top2Vec/embedding/trained_models/top2vec_model',
-    # doc2vec_output_path='/home/women/doyoung/Top2Vec/embedding/trained_models/doc2vec_model',
-    # input_path='/home/women/doyoung/Top2Vec/preprocessing/output/text_1100.txt'
-    # )
-    # trainer.process()
+    # 모델 학습시킨 후, 학습된 모델 저장
+    trainer = Top2VecTrainer(
+    top2vec_output_path='/home/women/doyoung/Top2Vec/embedding/trained_models',
+    input_path='/home/women/doyoung/Top2Vec/preprocessing/input/text_900.txt',
+    doc_count=900
+    )      
+    trainer.process()     
     
     # # 모델이 학습한 문서 및 단어에 대한 임베딩값 추출 
     # processor = Top2VecProcessor(
-    #     output_dir='/home/women/doyoung/Top2Vec/embedding/output',
-    #     input_dir='/home/women/doyoung/Top2Vec/preprocessing/input/text_1100.txt',
-    #     model_path='/home/women/doyoung/Top2Vec/embedding/trained_models/top2vec_trained1100',
-    #     title_path='/home/women/doyoung/Top2Vec/preprocessing/input/title.txt'
+    #     output_dir='./embedding/output0305/',
+    #     input_dir='./data/input/text_900.txt',
+    #     model_path='./model/top2vec_model',
+    #     title_path='./data/input/title_900.txt'
     # )
     # processor.process()
 
-    ## 학습된 doc2vec을 활용한 문서/단어 임베딩 추론
-    inference = Doc2VecInference(
-        model_path='/home/women/doyoung/Top2Vec/embedding/trained_models/doc2vec_model', 
-        output_dir='/home/women/doyoung/Top2Vec/embedding/output/inferred_doc_word',
-    )
+    # # 학습된 doc2vec을 활용한 문서/단어 임베딩 추론
+    # inference = Top2VecInference(
+    #     top2vec_model_path='./model/top2vec_model', 
+    #     output_dir='./embedding/output/inferred_doc_word/',
+    # )
    
-    # 새로운 문서들로 구성된 2차원 리스트. txt/csv 입력 데이터를 2차원 리스트로 변환해야 함.
-    documents = [
-        ["고양이 집사 아파트 주인"],
-        ["포도 사과 오렌지 가게 위치"],
-        ["책상 의자 소파 침대"]
-    ]
-    inference.process(documents)
+    # # 새로운 문서들로 구성된 2차원 리스트. txt/csv 입력 데이터를 2차원 리스트로 변환해야 함.
+    # documents = [
+    #     ["고양이 집사 아파트 주인"],
+    #     ["포도 사과 오렌지 가게 위치"],
+    #     ["책상 의자 소파 침대"]
+    # ]
+    # inference.process(documents)
 
