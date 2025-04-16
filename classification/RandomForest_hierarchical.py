@@ -3,24 +3,20 @@ import pandas as pd
 import os
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.multioutput import MultiOutputClassifier
-from sklearn.metrics import f1_score, roc_curve, roc_auc_score
+from sklearn.metrics import f1_score, roc_curve, roc_auc_score, precision_score, recall_score
 
 # === 설정 ==================================================================
+DOCUMENT_EMBEDDINGS_PATH = '/home/women/gh/Top2Vec_Logistic_module0304/embedding/output0305/gpt_document_embeddings_900.csv'
 
-DOCUMENT_EMBEDDINGS_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_163.csv'
-TEST900_PATH = '/home/women/doyoung/Top2Vec/embedding/output/document_embeddings_900.csv'
-TITLE900_PATH = '/home/women/doyoung/Top2Vec/preprocessing/input/title_900.txt'
+MAJOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/gpt_major_GT.csv'
+MINOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/gpt_minor_GT.csv'
 
-MAJOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/major_GT.csv'
-MINOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/minor_GT.csv'
+OUTPUT_DIR = f'/home/women/doyoung/Top2Vec/classification/output/LogisticRegression/hierarchical_gpt'
 
-OUTPUT_DIR = f'/home/women/doyoung/Top2Vec/classification/output/RandomForest/hierarchical'
+Y_MAJOR_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_gpt_major.csv'
+Y_MINOR_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_gpt_minor.csv'
 
-Y_MAJOR_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_major.csv'
-Y_MINOR_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_minor.csv'
 
-TEST_DB_KEY = [453073, 453074, 453075, 453076, 453077, 453078, 453079, 453082, 453083, 453084, 453093,
-                453095, 453096, 453097, 452970, 453102, 453104, 453105, 453110, 453114, 453116]
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -29,18 +25,20 @@ X = pd.read_csv(DOCUMENT_EMBEDDINGS_PATH, header=0)
 Y_major = pd.read_csv(Y_MAJOR_PATH, header=0)
 Y_minor = pd.read_csv(Y_MINOR_PATH, header=0)
 
+TEST_DB_KEY = X['Document ID'].values
+
 X['Embedding Vector'] = X['Embedding Vector'].astype(str).apply(
-    lambda x: np.array(list(map(float, x.strip('[]').split(',')))))
+    lambda x: np.array(list(map(float, x.strip('[]').split(','))))
+)
 
-# 테스트 데이터(138~158) 분리
-test_mask = (X['Document ID'] >= 138) & (X['Document ID'] <= 158)
-X_test = X[test_mask].copy()
-X_train = X[~test_mask].copy()
+# 테스트 데이터 분리
+X_train = X.iloc[:730].copy()  
+X_test = X.iloc[730:].copy() 
 
-Y_major_test = Y_major.loc[test_mask].copy()
-Y_major_train = Y_major.loc[~test_mask].copy()
-Y_minor_test = Y_minor.loc[test_mask].copy()
-Y_minor_train = Y_minor.loc[~test_mask].copy()
+Y_major_train = Y_major.iloc[:730].copy()
+Y_major_test = Y_major.iloc[730:].copy()
+Y_minor_train = Y_minor.iloc[:730].copy()
+Y_minor_test = Y_minor.iloc[730:].copy()
 
 # 단일 클래스 컬럼 제거 (대분류)
 major_single_class_cols = [col for col in Y_major.columns if Y_major_train[col].nunique() == 1]
@@ -156,9 +154,26 @@ f1_micro = f1_score(Y_minor_test, Y_minor_pred, average="micro")
 f1_macro = f1_score(Y_minor_test, Y_minor_pred, average="macro")
 f1_weighted = f1_score(Y_minor_test, Y_minor_pred, average="weighted")
 
-print(f"Micro F1 Score (Optimal Threshold): {f1_micro:.4f}")
-print(f"Macro F1 Score (Optimal Threshold): {f1_macro:.4f}")
-print(f"Weighted F1 Score (Optimal Threshold): {f1_weighted:.4f}")
+precision_micro = precision_score(Y_minor_test, Y_minor_pred, average="micro", zero_division=0)
+recall_micro = recall_score(Y_minor_test, Y_minor_pred, average="micro", zero_division=0)
+precision_macro = precision_score(Y_minor_test, Y_minor_pred, average="macro", zero_division=0)
+recall_macro = recall_score(Y_minor_test, Y_minor_pred, average="macro", zero_division=0)
+precision_weighted = precision_score(Y_minor_test, Y_minor_pred, average="weighted", zero_division=0)
+recall_weighted = recall_score(Y_minor_test, Y_minor_pred, average="weighted", zero_division=0)
+print('\n')
+print('========[Random Forest 중분류 성능]=======')
+print('------------------[F1 score]-------------------')
+print(f"Micro F1 Score: {f1_micro:.4f}")
+print(f"Macro F1 Score: {f1_macro:.4f}")
+print(f"Weighted F1 Score: {f1_weighted:.4f}")
+print('--------------[Precision/Recall]---------------')
+print(f"Micro Precision: {precision_micro:.4f}")
+print(f"Micro Recall: {recall_micro:.4f}")
+print(f"Macro Precision: {precision_macro:.4f}")
+print(f"Macro Recall: {recall_macro:.4f}")
+print(f"Weighted Precision: {precision_weighted:.4f}")
+print(f"Weighted Recall: {recall_weighted:.4f}")
+
 
 minor_optimal_thresholds_df = pd.DataFrame({
     "class_name": Y_minor_train_filtered.columns.tolist(),

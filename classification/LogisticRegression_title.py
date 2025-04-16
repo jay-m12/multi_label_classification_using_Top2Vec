@@ -1,3 +1,5 @@
+# 보고서 제목 중 중분류/대분류 카테고리명이 포함된 경우 고려
+
 import numpy as np
 import pandas as pd
 import os

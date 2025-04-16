@@ -3,10 +3,10 @@ import pandas as pd
 import os
 from sklearn.linear_model import LogisticRegression
 from sklearn.multioutput import MultiOutputClassifier
-from sklearn.metrics import f1_score, roc_curve, roc_auc_score
+from sklearn.metrics import f1_score, roc_curve, roc_auc_score, precision_score, recall_score
 
 # === 설정 ==================================================================
-DOCUMENT_EMBEDDINGS_PATH = '/home/women/doyoung/Top2Vec/embedding/output/gpt_document_embeddings_900.csv'
+DOCUMENT_EMBEDDINGS_PATH = '/home/women/doyoung/Top2Vec/embedding/embedding_output/top2vec/document_embeddings.csv'
 
 MAJOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/gpt_major_GT.csv'
 MINOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/gpt_minor_GT.csv'
@@ -38,6 +38,7 @@ Y_major_test = Y_major.iloc[730:].copy()
 Y_minor_train = Y_minor.iloc[:730].copy()
 Y_minor_test = Y_minor.iloc[730:].copy()
 
+
 # 단일 클래스 컬럼 제거 (대분류)
 major_single_class_cols = [col for col in Y_major.columns if Y_major_train[col].nunique() == 1]
 Y_major_train_filtered = Y_major_train.drop(columns=major_single_class_cols)
@@ -65,6 +66,8 @@ Y_major_test = Y_major_test_filtered.values
 Y_minor_train = Y_minor_train_filtered.values
 Y_minor_test = Y_minor_test_filtered.values
 
+
+
 # === 대분류 모델 학습 및 예측 ===================================================
 major_base_model = LogisticRegression(max_iter=1000, class_weight="balanced")
 major_model = MultiOutputClassifier(major_base_model)
@@ -80,7 +83,6 @@ for i in range(Y_major_test.shape[1]):
     
     n_classes = Y_major_pred_proba[i].shape[1]
     class_prob = Y_major_pred_proba[i][:, 1] if n_classes >= 2 else Y_major_pred_proba[i][:, 0]
-    
     fpr, tpr, thresholds = roc_curve(Y_major_test[:, i], class_prob)
     youdens_j = tpr - fpr
     optimal_idx = np.argmax(youdens_j)
@@ -92,6 +94,8 @@ Y_major_pred = np.array([
      else (proba[:, 0] >= major_optimal_thresholds[i])).astype(int)
     for i, proba in enumerate(Y_major_pred_proba)
 ]).T
+
+
 
 # === 중분류 모델 학습 및 예측 ===================================================
 minor_base_model = LogisticRegression(max_iter=1000, class_weight="balanced")
@@ -153,9 +157,25 @@ f1_micro = f1_score(Y_minor_test, Y_minor_pred, average="micro")
 f1_macro = f1_score(Y_minor_test, Y_minor_pred, average="macro")
 f1_weighted = f1_score(Y_minor_test, Y_minor_pred, average="weighted")
 
-print(f"Micro F1 Score (Optimal Threshold): {f1_micro:.4f}")
-print(f"Macro F1 Score (Optimal Threshold): {f1_macro:.4f}")
-print(f"Weighted F1 Score (Optimal Threshold): {f1_weighted:.4f}")
+precision_micro = precision_score(Y_minor_test, Y_minor_pred, average="micro", zero_division=0)
+recall_micro = recall_score(Y_minor_test, Y_minor_pred, average="micro", zero_division=0)
+precision_macro = precision_score(Y_minor_test, Y_minor_pred, average="macro", zero_division=0)
+recall_macro = recall_score(Y_minor_test, Y_minor_pred, average="macro", zero_division=0)
+precision_weighted = precision_score(Y_minor_test, Y_minor_pred, average="weighted", zero_division=0)
+recall_weighted = recall_score(Y_minor_test, Y_minor_pred, average="weighted", zero_division=0)
+print('\n')
+print('========[Logistic Regression 중분류 성능]=======')
+print('------------------[F1 score]-------------------')
+print(f"Micro F1 Score: {f1_micro:.4f}")
+print(f"Macro F1 Score: {f1_macro:.4f}")
+print(f"Weighted F1 Score: {f1_weighted:.4f}")
+print('--------------[Precision/Recall]---------------')
+print(f"Micro Precision: {precision_micro:.4f}")
+print(f"Micro Recall: {recall_micro:.4f}")
+print(f"Macro Precision: {precision_macro:.4f}")
+print(f"Macro Recall: {recall_macro:.4f}")
+print(f"Weighted Precision: {precision_weighted:.4f}")
+print(f"Weighted Recall: {recall_weighted:.4f}")
 
 minor_optimal_thresholds_df = pd.DataFrame({ 
     "class_name": Y_minor_train_filtered.columns.tolist(),

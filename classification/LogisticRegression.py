@@ -158,8 +158,8 @@ class Top2VecLogisticRegression:
         print(f"Hit@3: {hit_3:.4f}")
         print(f"Hit@5: {hit_5:.4f}")
 
-        optimal_thresholds_df.to_csv(f"{self.OUTPUT_DIR}/optimal_thresholds_lr.csv", index=False)
-        print(f"\nOptimal thresholds saved to '{self.OUTPUT_DIR}/optimal_thresholds_lr.csv'.")
+        optimal_thresholds_df.to_csv(f"{self.OUTPUT_DIR}/optimal_thresholds_lr_{self.topic_size}.csv", index=False)
+        print(f"\nOptimal thresholds saved to '{self.OUTPUT_DIR}/optimal_thresholds_lr_{self.topic_size}.csv'.")
         
 
     def prepare_predictions(self):
@@ -262,18 +262,19 @@ class Top2VecLogisticRegression:
         self.calculate_performance_metrics()
         self.save_results()
 
+
+
+
 if __name__ == "__main__":
-    TOPIC_SIZE = 'minor'
-    X_PATH = '/home/women/doyoung/Top2Vec/embedding/output/gpt_document_embeddings_900.csv'
+    TOPIC_SIZE = 'minor'     # 중분류 기준으로 분류 시 minor 입력. 대분류 기준으로 분류 시 major 입력.
+    X_PATH = '/home/women/doyoung/Top2Vec/embedding/embedding_output/top2vec/document_embeddings.csv'
     Y_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_gpt_{TOPIC_SIZE}.csv'
     TITLE_PATH = '/home/women/doyoung/Top2Vec/preprocessing/input/gpt_gt.csv'
     GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/gpt_{TOPIC_SIZE}_GT.csv'
-    OUTPUT_DIR = f'/home/women/doyoung/Top2Vec/classification/output/LogisticRegression/{TOPIC_SIZE}'
+    OUTPUT_DIR = f'/home/women/doyoung/Top2Vec/classification/output/LogisticRegression/basic/{TOPIC_SIZE}'
     
     evaluator = Top2VecLogisticRegression(
         TOPIC_SIZE, X_PATH, Y_PATH, TITLE_PATH, GROUND_TRUTH, OUTPUT_DIR
     )
     evaluator.run()
-
-
 
