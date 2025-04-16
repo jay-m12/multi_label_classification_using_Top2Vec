@@ -5,7 +5,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.multioutput import MultiOutputClassifier
 from sklearn.metrics import f1_score, roc_curve, roc_auc_score, precision_score, recall_score
 
-# === 설정 ==================================================================
+
 DOCUMENT_EMBEDDINGS_PATH = '/home/women/doyoung/Top2Vec/embedding/embedding_output/top2vec/document_embeddings.csv'
 
 MAJOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/gpt_major_GT.csv'
@@ -18,7 +18,7 @@ Y_MINOR_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_gpt_minor.cs
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# === 데이터 로드 ===============================================================
+
 X = pd.read_csv(DOCUMENT_EMBEDDINGS_PATH, header=0)
 Y_major = pd.read_csv(Y_MAJOR_PATH, header=0)
 Y_minor = pd.read_csv(Y_MINOR_PATH, header=0)
@@ -29,7 +29,7 @@ X['Embedding Vector'] = X['Embedding Vector'].astype(str).apply(
     lambda x: np.array(list(map(float, x.strip('[]').split(','))))
 )
 
-# 테스트 데이터 분리
+
 X_train = X.iloc[:730].copy()  
 X_test = X.iloc[730:].copy() 
 
@@ -39,7 +39,7 @@ Y_minor_train = Y_minor.iloc[:730].copy()
 Y_minor_test = Y_minor.iloc[730:].copy()
 
 
-# 단일 클래스 컬럼 제거 (대분류)
+
 major_single_class_cols = [col for col in Y_major.columns if Y_major_train[col].nunique() == 1]
 Y_major_train_filtered = Y_major_train.drop(columns=major_single_class_cols)
 Y_major_test_filtered = Y_major_test.drop(columns=major_single_class_cols)
@@ -47,7 +47,7 @@ Y_major_test_filtered = Y_major_test.drop(columns=major_single_class_cols)
 print(f"[대분류] 제거된 컬럼 수: {len(major_single_class_cols)}/{Y_major.shape[1]}")
 print("[대분류] 제거된 컬럼 목록:", major_single_class_cols)
 
-# 단일 클래스 컬럼 제거 (중분류)
+
 minor_single_class_cols = [col for col in Y_minor.columns if Y_minor_train[col].nunique() == 1]
 Y_minor_train_filtered = Y_minor_train.drop(columns=minor_single_class_cols)
 Y_minor_test_filtered = Y_minor_test.drop(columns=minor_single_class_cols)
@@ -68,7 +68,7 @@ Y_minor_test = Y_minor_test_filtered.values
 
 
 
-# === 대분류 모델 학습 및 예측 ===================================================
+
 major_base_model = LogisticRegression(max_iter=1000, class_weight="balanced")
 major_model = MultiOutputClassifier(major_base_model)
 major_model.fit(X_train, Y_major_train)
@@ -97,14 +97,14 @@ Y_major_pred = np.array([
 
 
 
-# === 중분류 모델 학습 및 예측 ===================================================
+
 minor_base_model = LogisticRegression(max_iter=1000, class_weight="balanced")
 minor_model = MultiOutputClassifier(minor_base_model)
 minor_model.fit(X_train, Y_minor_train)
 
 Y_minor_pred_proba = minor_model.predict_proba(X_test)
 
-# === 대분류-중분류 매핑 ==================================================
+
 major_minor_mapping = {
     0: ['가족정책', '돌봄', '저출산', '일생활균형_가족'],  # 가족
     1: ['건강'],  # 건강
@@ -152,7 +152,7 @@ Y_minor_pred = np.array([
     for i, proba in enumerate(Y_minor_pred_proba)
 ]).T
 
-# === 결과 평가 및 저장 =========================================================
+
 f1_micro = f1_score(Y_minor_test, Y_minor_pred, average="micro")
 f1_macro = f1_score(Y_minor_test, Y_minor_pred, average="macro")
 f1_weighted = f1_score(Y_minor_test, Y_minor_pred, average="weighted")
@@ -182,7 +182,6 @@ minor_optimal_thresholds_df = pd.DataFrame({
     "optimal_threshold": minor_optimal_thresholds
 })
 minor_optimal_thresholds_df.to_csv(f"{OUTPUT_DIR}/optimal_thresholds_lr.csv", index=False)
-print(f"\nOptimal thresholds saved to '{OUTPUT_DIR}/optimal_thresholds_lr.csv'.")
 
 auc_scores = []
 for i in range(Y_minor_test.shape[1]):
@@ -225,7 +224,7 @@ print(f"Hit@1: {hit_1:.4f}")
 print(f"Hit@3: {hit_3:.4f}")
 print(f"Hit@5: {hit_5:.4f}")
 
-# === 결과 저장 ===============================================================
+
 def predict_label(row, column_names):
     return ', '.join(column_names[row == 1])
 

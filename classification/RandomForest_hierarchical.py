@@ -5,7 +5,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.multioutput import MultiOutputClassifier
 from sklearn.metrics import f1_score, roc_curve, roc_auc_score, precision_score, recall_score
 
-# === 설정 ==================================================================
+
 DOCUMENT_EMBEDDINGS_PATH = '/home/women/gh/Top2Vec_Logistic_module0304/embedding/output0305/gpt_document_embeddings_900.csv'
 
 MAJOR_GROUND_TRUTH = f'/home/women/doyoung/Top2Vec/preprocessing/output/gpt_major_GT.csv'
@@ -20,7 +20,7 @@ Y_MINOR_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_gpt_minor.cs
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# === 데이터 로드 ===============================================================
+
 X = pd.read_csv(DOCUMENT_EMBEDDINGS_PATH, header=0)
 Y_major = pd.read_csv(Y_MAJOR_PATH, header=0)
 Y_minor = pd.read_csv(Y_MINOR_PATH, header=0)
@@ -31,7 +31,7 @@ X['Embedding Vector'] = X['Embedding Vector'].astype(str).apply(
     lambda x: np.array(list(map(float, x.strip('[]').split(','))))
 )
 
-# 테스트 데이터 분리
+
 X_train = X.iloc[:730].copy()  
 X_test = X.iloc[730:].copy() 
 
@@ -40,7 +40,7 @@ Y_major_test = Y_major.iloc[730:].copy()
 Y_minor_train = Y_minor.iloc[:730].copy()
 Y_minor_test = Y_minor.iloc[730:].copy()
 
-# 단일 클래스 컬럼 제거 (대분류)
+
 major_single_class_cols = [col for col in Y_major.columns if Y_major_train[col].nunique() == 1]
 Y_major_train_filtered = Y_major_train.drop(columns=major_single_class_cols)
 Y_major_test_filtered = Y_major_test.drop(columns=major_single_class_cols)
@@ -48,7 +48,7 @@ Y_major_test_filtered = Y_major_test.drop(columns=major_single_class_cols)
 print(f"[대분류] 제거된 컬럼 수: {len(major_single_class_cols)}/{Y_major.shape[1]}")
 print("[대분류] 제거된 컬럼 목록:", major_single_class_cols)
 
-# 단일 클래스 컬럼 제거 (중분류)
+
 minor_single_class_cols = [col for col in Y_minor.columns if Y_minor_train[col].nunique() == 1]
 Y_minor_train_filtered = Y_minor_train.drop(columns=minor_single_class_cols)
 Y_minor_test_filtered = Y_minor_test.drop(columns=minor_single_class_cols)
@@ -66,7 +66,7 @@ Y_major_test = Y_major_test_filtered.values
 Y_minor_train = Y_minor_train_filtered.values
 Y_minor_test = Y_minor_test_filtered.values
 
-# === 대분류 모델 학습 및 예측 ===================================================
+
 major_base_model = RandomForestClassifier(n_estimators=100, class_weight="balanced", random_state=42)
 major_model = MultiOutputClassifier(major_base_model)
 major_model.fit(X_train, Y_major_train)
@@ -94,14 +94,14 @@ Y_major_pred = np.array([
     for i, proba in enumerate(Y_major_pred_proba)
 ]).T
 
-# === 중분류 모델 학습 및 예측 ===================================================
+
 minor_base_model = RandomForestClassifier(n_estimators=100, class_weight="balanced", random_state=42)
 minor_model = MultiOutputClassifier(minor_base_model)
 minor_model.fit(X_train, Y_minor_train)
 
 Y_minor_pred_proba = minor_model.predict_proba(X_test)
 
-# === 대분류-중분류 매핑 ==================================================
+
 major_minor_mapping = {
     0: ['가족정책', '돌봄', '저출산', '일생활균형_가족'],  # 가족
     1: ['건강'],  # 건강
@@ -122,9 +122,9 @@ def get_minor_classes(major_class_idx):
     minor_class_indices = [Y_minor_train_filtered.columns.get_loc(col) for col in minor_classes if col in Y_minor_train_filtered.columns]
     return minor_class_indices
 
-# 중분류 확률값 조정 (대분류 예측 결과에 따라)
-for doc_idx in range(X_test.shape[0]):  # 문서 수
-    for class_idx in range(Y_major_pred.shape[1]):  # 대분류 수
+
+for doc_idx in range(X_test.shape[0]): 
+    for class_idx in range(Y_major_pred.shape[1]):  
         if Y_major_pred[doc_idx, class_idx] == 0:
             minor_class_indices = get_minor_classes(class_idx)
             for minor_class_idx in minor_class_indices:
@@ -136,7 +136,7 @@ for i in range(len(Y_minor_pred_proba)):
         minor_optimal_thresholds.append(0.3)
         continue
     
-    class_prob = Y_minor_pred_proba[i][:, 1]  # 양성 클래스(1)의 확률
+    class_prob = Y_minor_pred_proba[i][:, 1]
     
     fpr, tpr, thresholds = roc_curve(Y_minor_test[:, i], class_prob)
     youdens_j = tpr - fpr
@@ -149,7 +149,7 @@ Y_minor_pred = np.array([
     for i, proba in enumerate(Y_minor_pred_proba)
 ]).T
 
-# === 평가 및 저장 =========================================================
+
 f1_micro = f1_score(Y_minor_test, Y_minor_pred, average="micro")
 f1_macro = f1_score(Y_minor_test, Y_minor_pred, average="macro")
 f1_weighted = f1_score(Y_minor_test, Y_minor_pred, average="weighted")
@@ -182,7 +182,7 @@ minor_optimal_thresholds_df = pd.DataFrame({
 minor_optimal_thresholds_df.to_csv(f"{OUTPUT_DIR}/optimal_thresholds_rf.csv", index=False)
 print(f"\nOptimal thresholds saved to '{OUTPUT_DIR}/optimal_thresholds_rf.csv'.")
 
-# AUC 계산
+
 auc_scores = []
 for i in range(Y_minor_test.shape[1]):
     if np.sum(Y_minor_test[:, i]) == 0:
@@ -201,7 +201,7 @@ valid_auc_scores = [score for score in auc_scores if score is not None]
 average_auc = np.mean(valid_auc_scores)
 print(f"Average AUC: {average_auc:.4f}")
 
-# Hit@k 계산
+
 y_proba_matrix = np.hstack([proba[:, -1].reshape(-1, 1) if proba.shape[1] > 1 else proba for proba in Y_minor_pred_proba])
 
 Y_minor_pred_full = np.zeros((Y_minor_pred.shape[0], len(Y_minor.columns)))

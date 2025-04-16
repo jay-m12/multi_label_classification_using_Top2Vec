@@ -38,7 +38,7 @@ class Top2VecRandomForest:
         self.X_train = self.X[~test_mask].copy()
         self.Y_train_df = self.Y.loc[~test_mask].copy()
 
-        # 단일 클래스 컬럼 식별 및 제거
+
         single_class_cols = [col for col in self.Y.columns if self.Y_train_df[col].nunique() == 1]
         self.Y_train_filtered = self.Y_train_df.drop(columns=single_class_cols)
         self.Y_test_filtered = self.Y_test_df.drop(columns=single_class_cols)
@@ -207,7 +207,7 @@ class Top2VecRandomForest:
         with open(title_file, "r", encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
-                if '-' in line:  # '-'이 포함된 줄만 처리
+                if '-' in line:  
                     try:
                         db_key, title = line.split('-', 1)
                         title_dict[db_key] = title

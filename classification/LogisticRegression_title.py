@@ -113,7 +113,6 @@ class Top2VecLogisticRegression:
                         col_index = self.Y_train_filtered.columns.get_loc(minor_keyword)
                         prev_prob = self.Y_pred_proba[col_index][i, 1]
                         self.Y_pred_proba[col_index][i, 1] += 0.3
-                        # print(f"[Doc {i+730}] '{title}' ▶ 중분류 '{minor_keyword}' 확률 업데이트: {prev_prob:.4f} → 1.0000")
 
             for major_keyword in major_keywords:
                 if major_keyword in title:  
@@ -122,7 +121,6 @@ class Top2VecLogisticRegression:
                             col_index = self.Y_train_filtered.columns.get_loc(minor_keyword)
                             prev_prob = self.Y_pred_proba[col_index][i, 1]
                             self.Y_pred_proba[col_index][i, 1] += 0.3
-                            # print(f"[Doc {i+730}] '{title}' ▶ 대분류 '{major_keyword}' → 중분류 '{minor_keyword}' 확률 증가: {prev_prob:.4f} → {self.Y_pred_proba[col_index][i, 1]:.4f}")
 
         self.Y_pred = np.array([
         ((proba[:, 1] >= self.optimal_thresholds[i]) if proba.shape[1] > 1 
@@ -203,7 +201,6 @@ class Top2VecLogisticRegression:
         print(f"Hit@5: {hit_5:.4f}")
 
         optimal_thresholds_df.to_csv(f"{self.OUTPUT_DIR}/optimal_thresholds_lr.csv", index=False)
-        print(f"\nOptimal thresholds saved to '{self.OUTPUT_DIR}/optimal_thresholds_lr.csv'.")
         
 
     def prepare_predictions(self):
@@ -233,21 +230,17 @@ class Top2VecLogisticRegression:
         return ', '.join([f"{label}-{proba:.3f}" for label, proba in labels_with_proba]) 
 
     def save_results(self):
-        # ----- 소분류(predicted labels) 결과 파일 생성 -----
-        # 예측 결과 DataFrame (Label 컬럼은 빈 문자열로 채움)
         pred_minor_df = pd.DataFrame({
             'DB Key': self.test_db_key[730:],
             'Title': self.title[730:],
             'Model': 'Top2Vec-LogisticRegression',
             'Labels': [self.predict_label(row, self.Y.columns) for row in self.Y_pred_full],
         })
-        # GT DataFrame (파일에서 로드한 순서를 그대로 사용)
         gt_minor_df = self.ground_truth_df.copy()
         gt_minor_df = gt_minor_df[730:]
         gt_minor_df.rename(columns={'Label': 'Labels'}, inplace=True)
         gt_minor_df.insert(1, 'Title', self.title[730:])
 
-        # 각 DB Key에 대해 예측 결과 행 다음에 GT 행이 나오도록 교차 결합
         interleaved_minor = []
         for i in range(len(self.title[730:])):
             interleaved_minor.append(pred_minor_df.iloc[i])
@@ -259,7 +252,6 @@ class Top2VecLogisticRegression:
         print(f'각 문서의 소분류 라벨 예측 결과 저장 경로: {lable_res_path}')
         
         
-        # ----- 소분류(predicted labels with probability) 결과 파일 생성 -----
         pred_minor_prob_df = pd.DataFrame({
             'DB Key': self.test_db_key[730:],
             'Title': self.title[730:],
@@ -267,7 +259,7 @@ class Top2VecLogisticRegression:
             'Labels': [self.predict_label_with_proba(row, proba_row, self.Y.columns)
                     for row, proba_row in zip(self.Y_pred_full, self.Y_proba_full)],
         })
-        # 동일한 GT DataFrame 사용
+
         interleaved_minor_prob = []
         for i in range(len(self.title[730:])):
             interleaved_minor_prob.append(pred_minor_prob_df.iloc[i])
@@ -279,7 +271,6 @@ class Top2VecLogisticRegression:
         print(f'각 문서의 라벨 및 확률 예측 결과 저장 경로: {lable_res_with_prob_path}')
         
         
-        # ----- 소분류(all labels with probability) 결과 파일 생성 -----
         pred_minor_all_df = pd.DataFrame({
             'DB Key': self.test_db_key[730:],
             'Title': self.title[730:],

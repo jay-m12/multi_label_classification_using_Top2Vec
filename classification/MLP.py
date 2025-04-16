@@ -39,13 +39,13 @@ class MLP:
             lambda x: np.array(list(map(float, x.strip('[]').split(','))))
         )
 
-        # 데이터 분할 (730개 학습, 181개 테스트)
+
         self.X_train = self.X.iloc[:730].copy()
         self.Y_train_df = self.Y.iloc[:730].copy()
         self.X_test = self.X.iloc[730:].copy()
         self.Y_test_df = self.Y.iloc[730:].copy()
 
-        # 단일 클래스 컬럼 제거
+
         single_class_cols = [col for col in self.Y.columns if self.Y_train_df[col].nunique() == 1]
         self.Y_train_filtered = self.Y_train_df.drop(columns=single_class_cols)
         self.Y_test_filtered = self.Y_test_df.drop(columns=single_class_cols)
@@ -63,7 +63,7 @@ class MLP:
         self.Y_train = self.Y_train_filtered.values
         self.Y_test = self.Y_test_filtered.values
 
-        # 데이터 정규화
+
         self.scaler = StandardScaler()
         self.X_train = self.scaler.fit_transform(self.X_train)
         self.X_test = self.scaler.transform(self.X_test)
@@ -136,12 +136,12 @@ class MLP:
             return hits / len(y_true)
     
     def calculate_performance_metrics(self):
-        # F1 Score 계산
+
         f1_micro = f1_score(self.Y_test, self.Y_pred, average="micro", zero_division=0)
         f1_macro = f1_score(self.Y_test, self.Y_pred, average="macro", zero_division=0)
         f1_weighted = f1_score(self.Y_test, self.Y_pred, average="weighted", zero_division=0)
 
-        # Precision & Recall 계산
+
         precision_micro = precision_score(self.Y_test, self.Y_pred, average="micro", zero_division=0)
         recall_micro = recall_score(self.Y_test, self.Y_pred, average="micro", zero_division=0)
         precision_macro = precision_score(self.Y_test, self.Y_pred, average="macro", zero_division=0)
@@ -163,13 +163,13 @@ class MLP:
         print(f"Weighted Precision: {precision_weighted:.4f}")
         print(f"Weighted Recall: {recall_weighted:.4f}")
 
-        # Optimal Thresholds 저장
+
         optimal_thresholds_df = pd.DataFrame({
             "class_name": self.Y_train_filtered.columns.tolist(),
             "optimal_threshold": self.optimal_thresholds
         })
         
-        # AUC 계산
+
         auc_scores = []
         for i in range(self.Y_test.shape[1]):
             if np.sum(self.Y_test[:, i]) == 0:
@@ -188,7 +188,7 @@ class MLP:
         print('-------------------[AUC]--------------------')
         print(f"Average AUC: {average_auc:.4f}")
 
-        # Hit@K 계산
+
         
         hit_1 = self.calculate_hit_at_k(self.Y_test, self.Y_pred_proba, 1)
         hit_3 = self.calculate_hit_at_k(self.Y_test, self.Y_pred_proba, 3)
@@ -199,7 +199,7 @@ class MLP:
         print(f"Hit@3: {hit_3:.4f}")
         print(f"Hit@5: {hit_5:.4f}")
 
-        # 최적 Threshold 값 저장
+
         optimal_thresholds_df.to_csv(f"{self.OUTPUT_DIR}/optimal_thresholds_mlp.csv", index=False)
         print(f"\nOptimal thresholds saved to '{self.OUTPUT_DIR}/optimal_thresholds_mlp.csv'.")
 

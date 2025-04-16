@@ -5,7 +5,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.multioutput import MultiOutputClassifier
 from sklearn.metrics import f1_score, roc_curve, roc_auc_score, precision_score, recall_score
 
-# === 설정 ==================================================================
+
 
 DOCUMENT_EMBEDDINGS_PATH = '/home/women/gh/Top2Vec_Logistic_module0304/embedding/output0305/gpt_document_embeddings_900.csv'
 
@@ -19,7 +19,7 @@ Y_MINOR_PATH = f'/home/women/doyoung/Top2Vec/preprocessing/output/Y_gpt_minor.cs
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# === 데이터 로드 ===============================================================
+
 X = pd.read_csv(DOCUMENT_EMBEDDINGS_PATH, header=0)
 Y_major = pd.read_csv(Y_MAJOR_PATH, header=0)
 Y_minor = pd.read_csv(Y_MINOR_PATH, header=0)
@@ -36,7 +36,7 @@ Y_major_train = Y_major.iloc[:730].values
 Y_major_test = Y_major.iloc[730:].values
 Y_minor_train = Y_minor.iloc[:730].values
 Y_minor_test = Y_minor.iloc[730:].values
-# === 대분류 모델 학습 및 예측 ===================================================
+
 major_base_model = MLPClassifier(hidden_layer_sizes=(20,), max_iter=300, random_state=42)  
 major_model = MultiOutputClassifier(major_base_model)
 major_model.fit(X_train, Y_major_train)
@@ -64,14 +64,14 @@ Y_major_pred = np.array([
     for i, proba in enumerate(Y_major_pred_proba)
 ]).T
 
-# === 중분류 모델 학습 및 예측 ===================================================
+
 minor_base_model = MLPClassifier(hidden_layer_sizes=(20,), max_iter=300, random_state=42)  
 minor_model = MultiOutputClassifier(minor_base_model)
 minor_model.fit(X_train, Y_minor_train)
 
 Y_minor_pred_proba = minor_model.predict_proba(X_test)
 
-# === 대분류-중분류 매핑 ==================================================
+
 major_minor_mapping = {
     0: ['가족정책', '돌봄', '저출산', '일생활균형_가족'],  # 가족
     1: ['건강'],  # 건강
@@ -119,7 +119,7 @@ Y_minor_pred = np.array([
     for i, proba in enumerate(Y_minor_pred_proba)
 ]).T
 
-# === 결과 평가 및 저장 =========================================================
+
 f1_micro = f1_score(Y_minor_test, Y_minor_pred, average="micro")
 f1_macro = f1_score(Y_minor_test, Y_minor_pred, average="macro")
 f1_weighted = f1_score(Y_minor_test, Y_minor_pred, average="weighted")
